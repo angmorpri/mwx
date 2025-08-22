@@ -78,13 +78,13 @@ class Account:
 
     def __lt__(self, other: Account | Counterpart | str) -> bool:
         """
-        Compares accounts based on their names.
-        Can be compared to Counterparts or strings, will always return False.
+        Accounts are compared by their orders.
+        When compared against counterparts, accounts should always come first.
         """
         if isinstance(other, Account):
-            return self.name < other.name
+            return self.order < other.order
         elif isinstance(other, (Counterpart, str)):
-            return False
+            return True
         return NotImplemented
 
     # Representation
@@ -132,14 +132,14 @@ class Counterpart:
     def __lt__(self, other: Account | Counterpart | str) -> bool:
         """
         Compares counterparts or strings based on their names.
-        Can be compared to Accounts, will always return True.
+        When compared against accounts, counterparts should always come last.
         """
         if isinstance(other, Counterpart):
             return self.name < other.name
         elif isinstance(other, str):
             return self.name < other
         elif isinstance(other, Account):
-            return True
+            return False
         return NotImplemented
 
     # Representation
@@ -177,6 +177,10 @@ class Category:
 
     def __post_init__(self) -> None:
         """Adjust and validate the category data."""
+        # MWID check
+        if self._type == 0:
+            self.mwid = -abs(self.mwid)
+
         # Name check
         if not CATEGORY_NAME_REGEX.match(self.name):
             raise ValueError(
@@ -287,6 +291,8 @@ class Entry:
     entry lifecycle. Using strings for either 'source' or 'target' will convert
     them into Counterpart objects.
 
+    'category' type must match entries type.
+
     'item' will default to the category title if empty.
 
     'in_day_order' is the amount of entries in that day when this entry
@@ -311,6 +317,10 @@ class Entry:
 
     def __post_init__(self) -> None:
         """Adjust and validate the entry data."""
+        # MWID check
+        if self._type == 0:
+            self.mwid = -abs(self.mwid)
+
         # Round amount
         self.amount = round(self.amount, 2)
 
@@ -326,38 +336,51 @@ class Entry:
         if self._type == 0:
             if not isinstance(self._source, Account):
                 raise ValueError(
-                    f"Invalid source type for transfer: {type(self._source)}"
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"an Account as source"
                 )
             if not isinstance(self._target, Account):
                 raise ValueError(
-                    f"Invalid target type for transfer: {type(self._target)}"
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"an Account as target"
                 )
         elif self._type == +1:
             if not isinstance(self._source, Counterpart):
                 raise ValueError(
-                    f"Invalid source type for income: {type(self._source)}"
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"a Counterpart as source"
                 )
             if not isinstance(self._target, Account):
                 raise ValueError(
-                    f"Invalid target type for income: {type(self._target)}"
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"an Account as target"
                 )
         elif self._type == -1:
             if not isinstance(self._source, Account):
                 raise ValueError(
-                    f"Invalid source type for expense: {type(self._source)}"
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"an Account as source"
                 )
             if not isinstance(self._target, Counterpart):
                 raise ValueError(
-                    f"Invalid target type for expense: {type(self._target)}"
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"a Counterpart as target"
                 )
+
+        # Check category's type matches this type
+        if self.category.type != self._type:
+            raise ValueError(
+                f"Entry of type {CATEGORY_TYPES[self._type]} cannot have "
+                f"category of type {CATEGORY_TYPES[self.category.type]}"
+            )
 
         # Adjust item
         if not self.item:
             self.item = self.category.title
 
         # Setup day order
-        self.in_day_order = Entry.DAY_TOTALS.get(self.date, 0)
-        Entry.DAY_TOTALS[self.date] = self.in_day_order + 1
+        self.in_day_order = Entry.DAY_TOTALS.get(self.date, 0) + 1
+        Entry.DAY_TOTALS[self.date] = self.in_day_order
 
     @property
     def type(self) -> int:
@@ -372,10 +395,16 @@ class Entry:
         value = Counterpart(value) if isinstance(value, str) else value
         if self._type in (0, -1):
             if not isinstance(value, Account):
-                raise ValueError(f"Invalid source type for entry: {type(value)}")
+                raise ValueError(
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"an Account as source"
+                )
         if self._type == +1:
             if not isinstance(value, Counterpart):
-                raise ValueError(f"Invalid source type for entry: {type(value)}")
+                raise ValueError(
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"a Counterpart as source"
+                )
         self._source = value
 
     @property
@@ -387,10 +416,16 @@ class Entry:
         value = Counterpart(value) if isinstance(value, str) else value
         if self._type in (0, +1):
             if not isinstance(value, Account):
-                raise ValueError(f"Invalid target type for entry: {type(value)}")
+                raise ValueError(
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"an Account as target"
+                )
         if self._type == -1:
             if not isinstance(value, Counterpart):
-                raise ValueError(f"Invalid target type for entry: {type(value)}")
+                raise ValueError(
+                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"a Counterpart as target"
+                )
         self._target = value
 
     @property
