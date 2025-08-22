@@ -2,6 +2,7 @@
 notes/
 .vscode/
 .python-version
+.pytest_cache
 
 # Python-generated files
 __pycache__/
