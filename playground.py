@@ -4,22 +4,32 @@ playground.py - Non-pytest testing
 """
 
 from datetime import datetime
+from pathlib import Path
 
-from mwx.model import Account, Category, Entry
+from mwx import etl
+
+TESTING_DB = Path(__file__).parent / "tests" / "Sep_10_2025_ExpensoDB"
+
 
 if __name__ == "__main__":
-    acc = Account(17, "Básicos", 10, "#998866")
-    icat = Category(10, "A50. Ingresos generales", +1, "#668800")
-    ocat = Category(20, "B50. Gastos generales", -1, "#886600")
-    tcat = Category(30, "T50. Reajustes", 0, "#101010")
-    income = Entry(10, 100.00, datetime.today(), +1, "Cliente", acc, icat, "Paga")
-    expense = Entry(20, 100.00, datetime.today(), -1, acc, "Proveedor", ocat, "Compra")
-    transfer = Entry(30, 100.00, datetime.today(), 0, acc, acc, tcat)
+    ns = etl.read(TESTING_DB)
+    print(f"Accounts: {len(ns.accounts)}")
+    for a in sorted(ns.accounts):
+        print(f"  {a}")
+    print("\n-----------\n")
 
-    print(acc)
-    print(icat)
-    print(ocat)
-    print(tcat)
-    print(income)
-    print(expense)
-    print(transfer)
+    print(f"Categories: {len(ns.categories)}")
+    for c in sorted(ns.categories):
+        print(f"  {c}")
+    print("\n-----------\n")
+
+    print(f"Notes: {len(ns.notes)}")
+    for n in sorted(ns.notes):
+        print(f"  {n}")
+    print("\n-----------\n")
+
+    entries = [e for e in ns.entries if e.is_paid]
+    print(f"Entries: {len(entries)}")
+    for e in list(sorted(entries))[-20:]:
+        print(f"  {e}")
+    print("\n-----------\n")

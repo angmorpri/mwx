@@ -256,7 +256,7 @@ class Category:
 class Note:
     """Notes that can be attached to entries.
 
-    'type' can be +1=Payer, -1=Payee.
+    'type' can be +1=Payer, -1=Payee, 0=Neutral.
 
     """
 
@@ -264,12 +264,24 @@ class Note:
     text: str
     _type: int  # Cannot change
 
-    def __str__(self) -> str:
-        return f"Note[{self.mwid:0>4}]('{self.text}', {self.type})"
-
     @property
     def type(self) -> int:
         return self._type
+
+    def __eq__(self, other: Note) -> bool:
+        """Two notes are equal if their texts match."""
+        if not isinstance(other, Note):
+            return NotImplemented
+        return self.text == other.text
+
+    def __lt__(self, other: Note) -> bool:
+        """Two notes are less than each other based on their texts."""
+        if not isinstance(other, Note):
+            return NotImplemented
+        return self.text < other.text
+
+    def __str__(self) -> str:
+        return f"Note[{self.mwid:0>4}]('{self.text}', {self.type})"
 
 
 @dataclass
@@ -449,6 +461,15 @@ class Entry:
     # Representation
 
     def __str__(self) -> str:
-        s = f"Entry[{self.mwid:0>4}]"
-        s += f"({self.amount:+>8.2f} {self.date:%Y-%m-%d} {self.source.repr_name} --> {self.target.repr_name} [{self.category.code}] '{self.item}')"
+        s = f"Entry[{self.mwid:0>5}]"
+
+        # Amount sign
+        if self.type == +1:
+            samount = f"+{self.amount:8.2f}"
+        elif self.type == -1:
+            samount = f"-{self.amount:8.2f}"
+        else:
+            samount = f"~{self.amount:8.2f}"
+
+        s += f"({self.date:%Y-%m-%d} # {samount:>} # {self.source.repr_name} --> {self.target.repr_name} [{self.category.code}] '{self.item}')"
         return s
