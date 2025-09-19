@@ -17,7 +17,13 @@ RGB_REGEX = re.compile(r"^#([0-9A-Fa-f]{6})$")
 WHITESPACE_REGEX = re.compile(r"\s")
 CATEGORY_NAME_REGEX = re.compile(r"^[A-Za-z]\d{2}\. .+$")
 
-CATEGORY_TYPES = {-1: "Expense", 0: "Transfer", 1: "Income"}
+CATEGORY_TYPES = {
+    -1: "Expense",
+    -0.5: "Out Transfer",
+    0: "Transfer",
+    +0.5: "In Transfer",
+    1: "Income",
+}
 
 
 @dataclass
@@ -348,39 +354,39 @@ class Entry:
         if self._type == 0:
             if not isinstance(self._source, Account):
                 raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
                     f"an Account as source"
                 )
             if not isinstance(self._target, Account):
                 raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
                     f"an Account as target"
                 )
         elif self._type == +1:
             if not isinstance(self._source, Counterpart):
                 raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
                     f"a Counterpart as source"
                 )
             if not isinstance(self._target, Account):
                 raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
                     f"an Account as target"
                 )
         elif self._type == -1:
             if not isinstance(self._source, Account):
                 raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
                     f"an Account as source"
                 )
             if not isinstance(self._target, Counterpart):
                 raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
+                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
                     f"a Counterpart as target"
                 )
 
         # Check category's type matches this type
-        if self.category.type != self._type:
+        if self.category.type != int(self._type):
             raise ValueError(
                 f"Entry of type {CATEGORY_TYPES[self._type]} cannot have "
                 f"category of type {CATEGORY_TYPES[self.category.type]}"
@@ -442,7 +448,11 @@ class Entry:
 
     @property
     def id(self) -> str:
-        return f"{self.date:%Y%m%d}{self.in_day_order:0>4}"
+        return (
+            f"{self.date:%Y%m%d}"
+            f"{self.in_day_order:0>4}"
+            f"{'+' if self.amount >= 0 else '-'}"
+        )
 
     # Comparison
 
@@ -464,12 +474,23 @@ class Entry:
         s = f"Entry[{self.mwid:0>5}]"
 
         # Amount sign
-        if self.type == +1:
-            samount = f"+{self.amount:8.2f}"
-        elif self.type == -1:
-            samount = f"-{self.amount:8.2f}"
+        if self.type >= 0.5:
+            samount = f"+{abs(self.amount):8.2f}"
+        elif self.type <= -0.5:
+            samount = f"-{abs(self.amount):8.2f}"
         else:
-            samount = f"~{self.amount:8.2f}"
+            samount = f"~{abs(self.amount):8.2f}"
 
-        s += f"({self.date:%Y-%m-%d} # {samount:>} # {self.source.repr_name} --> {self.target.repr_name} [{self.category.code}] '{self.item}')"
+        # Flow arrow
+        if self.type == 0.5:
+            arrow = "<--"
+        elif self.type == 0:
+            arrow = "<->"
+        else:
+            arrow = "-->"
+
+        s += f"({self.date:%Y-%m-%d} # {samount:>} # {self.source.repr_name} {arrow} {self.target.repr_name} [{self.category.code}] '{self.item}')"
         return s
+
+
+MWXItem = Account | Counterpart | Category | Note | Entry

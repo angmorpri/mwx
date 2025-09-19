@@ -1,10 +1,10 @@
 # 2025/08/21
 """
-etl.py - Defines the read and write operations for the application.
+etl.py - Reading and writing MyWallet data.
 
-Read extracts data from MyWallet SQLite databases, and transforms it into MWX
-data models (defined in model.py).
-Write serializes MWX data models back into a MyWallet SQLite database.
+Defines functions 'load' and 'write' for MyWallet data from or to SQLite
+databases. 'MWXNamespace' is a namedtuple defined to handle the collections of
+items: 'accounts', 'categories', 'entries', 'notes' and 'counterparts'.
 
 """
 
@@ -12,9 +12,14 @@ import sqlite3 as sqlite
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from mwx.model import Account, Category, Counterpart, Entry, Note
-from mwx.util import first
+from mwx.util import find_first
+
+MWXNamespace = namedtuple(
+    "MWXNamespace", ["accounts", "categories", "entries", "notes", "counterparts"]
+)
 
 MYWALLET_TABLES = [
     "tbl_account",
@@ -31,27 +36,12 @@ NOTES_TO_TBLNOTES = [-1, +1, 0]  # 0 --> -1 neutral, +1 --> +1 payer, -1 --> 0 p
 TBLTRANS_TO_ENTRY = [-1, +1]  # 0 --> -1 expense, +1 --> +1 income
 ENTRY_TO_TBLTRANS = [None, +1, 0]  # +1 --> +1 income, -1 --> 0 expense
 
-MWXNamespace = namedtuple(
-    "MWXNamespace",
-    ["accounts", "categories", "notes", "entries"],
-)
+
+# Main functions
 
 
-def read(path: str | Path) -> MWXNamespace:
-    """Reads data from a MyWallet SQLite database, and transforms it into MWX
-    data models.
-
-    Returns a 'MWXNamespace', an object that contains lists of models:
-    'accounts', 'categories', 'notes' and 'entries'.
-
-    """
-
-    # Custom namedtuple row factory
-    def _namedtuple_row_factory(cursor, row):
-        fields = [col[0] for col in cursor.description]
-        cls = namedtuple("Row", fields)
-        return cls._make(row)
-
+def read(path: str | Path) -> None:
+    """Reads data from a MyWallet SQLite database"""
     # Collect tables from the database
     data = {}
     with sqlite.connect(path) as conn:
@@ -107,14 +97,19 @@ def read(path: str | Path) -> MWXNamespace:
                 text=row.note_text,
                 _type=TBLNOTES_TO_NOTES[row.note_payee_payer],
             )
-            notes.append(note)
+        notes.append(note)
 
     # Entries - Transactions -- From 'tbl_trans'
     entries = []
+    counterparts = []
     for row in data["tbl_trans"]:
         entry_type = TBLTRANS_TO_ENTRY[row.exp_is_debit]
+        counterpart = find_first(counterparts, name=row.exp_payee_name)
+        if counterpart is None:
+            counterpart = Counterpart(row.exp_payee_name)
+            counterparts.append(counterpart)
         source, target = _get_source_target(
-            entry_type, row.exp_acc_id, row.exp_payee_name, accounts
+            entry_type, row.exp_acc_id, counterpart, accounts
         )
         category = _get_category(entry_type, row.exp_cat, categories)
         item, details = _itemize(row.exp_note)
@@ -135,8 +130,8 @@ def read(path: str | Path) -> MWXNamespace:
 
     # Entries - Transfers -- From 'tbl_transfer'
     for row in data["tbl_transfer"]:
-        source = _get_source_target(0, row.trans_from_id, "", accounts)[0]
-        target = _get_source_target(0, row.trans_to_id, "", accounts)[0]
+        source = _get_source_target(0, row.trans_from_id, None, accounts)[0]
+        target = _get_source_target(0, row.trans_to_id, None, accounts)[0]
         raw_category, _notes = _itemize(row.trans_note)
         category = _get_category(0, raw_category[1:-1], categories)
         item, details = _itemize(_notes)
@@ -160,27 +155,38 @@ def read(path: str | Path) -> MWXNamespace:
         categories=categories,
         notes=notes,
         entries=entries,
+        counterparts=counterparts,
     )
 
 
-def write(data: MWXNamespace, path: str | Path) -> None:
+def write(path: str | Path) -> None:
     pass
 
 
-# Auxiliar functions
+# Auxiliary functions
+
+
+def _namedtuple_row_factory(
+    cursor: sqlite.Cursor, row: tuple[tuple[str, Any]]
+) -> namedtuple:
+    fields = [col[0] for col in cursor.description]
+    cls = namedtuple("Row", fields)
+    return cls._make(row)
 
 
 def _get_source_target(
-    entry_type: int, acc_mwid: int, counterpart_name: str, accounts: list[Account]
+    entry_type: int,
+    acc_mwid: int,
+    counterpart: Counterpart | None,
+    accounts: list[Account],
 ) -> tuple[Account | Counterpart, Account | Counterpart]:
-    """Identifies the source and target of a transaction based on its type.
+    """Finds the source and target of a transaction based on its type.
 
-    Finds the accounts by their MyWallet ID, and, if they do not exist, creates
-    legacy ones.
+    Gets the account item by its MyWallet ID, creating a legacy one if it
+    does not exist.
 
     """
-    # Find or create the account
-    account = first(accounts, mwid=acc_mwid)
+    account = find_first(accounts, mwid=acc_mwid)
     if account is None:
         account = Account(
             mwid=acc_mwid,
@@ -188,23 +194,23 @@ def _get_source_target(
             legacy=True,
         )
         accounts.append(account)
-
-    # Return based on the entry's type
     if entry_type in (0, -1):
-        return account, Counterpart(counterpart_name)
+        return account, counterpart
     else:
-        return Counterpart(counterpart_name), account
+        return counterpart, account
 
 
 def _get_category(
-    entry_type: int, cat_id: int | str, categories: list[Category]
+    entry_type: int,
+    cat_id: int | str,
+    categories: list[Category],
 ) -> Category:
-    """Finds a category by its MyWallet ID or its name, creating a legacy one
-    if necessary.
+    """Finds a category by its MyWallet ID or its name, creating a legacy
+    one if it does not exist.
 
     """
     if isinstance(cat_id, int):
-        category = first(categories, mwid=cat_id)
+        category = find_first(categories, mwid=cat_id)
         if category is None:
             category = Category(
                 mwid=cat_id,
@@ -214,7 +220,7 @@ def _get_category(
             )
             categories.append(category)
     elif isinstance(cat_id, str):
-        category = first(categories, name=cat_id)
+        category = find_first(categories, name=cat_id)
         if category is None:
             _aux = len([c for c in categories if c.mwid >= 900])
             category = Category(

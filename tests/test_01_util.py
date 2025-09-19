@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from mwx.util import find, first
+from mwx.util import find, find_first
 
 # ** Tests for 'find' function **
 
@@ -75,11 +75,11 @@ def test_find_no_matches(sample_people):
 
 
 def test_find_first_no_matches(sample_people):
-    result = first(sample_people, lambda p: p.name == "Eve")
+    result = find_first(sample_people, lambda p: p.name == "Eve")
     assert result is None
 
 
 def test_find_first_with_matches(sample_people):
-    result = first(sample_people, city="New York")
+    result = find_first(sample_people, city="New York")
     assert result is not None
     assert result.name in {"Alice", "Charlie"}

@@ -33,7 +33,7 @@ def find(seq: Iterable[T], *args: Callable[[T], bool], **kwargs: Any) -> list[T]
     return [item for item in seq if all(cond(item) for cond in conds)]
 
 
-def first(seq: Iterable[T], *args: Callable[[T], bool], **kwargs: Any) -> T | None:
+def find_first(seq: Iterable[T], *args: Callable[[T], bool], **kwargs: Any) -> T | None:
     """Finds the first item in a sequence `seq` that matches given criteria.
 
     Criteria can be provided in two ways:
