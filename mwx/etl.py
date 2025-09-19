@@ -151,10 +151,10 @@ def read(path: str | Path) -> None:
         entries.append(entry)
 
     return MWXNamespace(
-        accounts=accounts,
-        categories=categories,
+        accounts=list(sorted(accounts)),
+        categories=list(sorted(categories)),
         notes=notes,
-        entries=entries,
+        entries=list(sorted(entries)),
         counterparts=counterparts,
     )
 

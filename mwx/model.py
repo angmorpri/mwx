@@ -19,9 +19,7 @@ CATEGORY_NAME_REGEX = re.compile(r"^[A-Za-z]\d{2}\. .+$")
 
 CATEGORY_TYPES = {
     -1: "Expense",
-    -0.5: "Out Transfer",
     0: "Transfer",
-    +0.5: "In Transfer",
     1: "Income",
 }
 
@@ -448,11 +446,34 @@ class Entry:
 
     @property
     def id(self) -> str:
-        return (
-            f"{self.date:%Y%m%d}"
-            f"{self.in_day_order:0>4}"
-            f"{'+' if self.amount >= 0 else '-'}"
-        )
+        return f"{self.date:%Y%m%d}{self.in_day_order:0>4}"
+
+    # Utility
+
+    def has_account(self, account: Account | str) -> bool:
+        """Checks if the entry involves the given account"""
+        if isinstance(account, Account):
+            account = account.name
+        return self.source.name == account or self.target.name == account
+
+    def tflow(self, pov: Account | str) -> int:
+        """Transfer flow with respect to the given account.
+
+        +1 if the entry is a transfer into the account.
+        -1 if the entry is a transfer out of the account.
+         0 if the entry is not a transfer or does not involve the account.
+
+        """
+        if self.type != 0:
+            return 0
+        if isinstance(pov, Account):
+            pov = pov.name
+        if self.source.name == pov:
+            return -1
+        elif self.target.name == pov:
+            return +1
+        else:
+            return 0
 
     # Comparison
 
@@ -481,15 +502,7 @@ class Entry:
         else:
             samount = f"~{abs(self.amount):8.2f}"
 
-        # Flow arrow
-        if self.type == 0.5:
-            arrow = "<--"
-        elif self.type == 0:
-            arrow = "<->"
-        else:
-            arrow = "-->"
-
-        s += f"({self.date:%Y-%m-%d} # {samount:>} # {self.source.repr_name} {arrow} {self.target.repr_name} [{self.category.code}] '{self.item}')"
+        s += f"({self.date:%Y-%m-%d} # {samount:>} # {self.source.repr_name} --> {self.target.repr_name} [{self.category.code}] '{self.item}')"
         return s
 
 
