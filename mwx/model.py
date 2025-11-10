@@ -37,6 +37,8 @@ class _MWXBaseModel(ABC):
 
     def __init__(self, mwid: int) -> None:
         self.mwid = mwid
+        if self.mwid < -1:
+            raise ValueError("MWID must be -1 (new entity) or non-negative integer.")
         self.str_mwid = f"{self.mwid:05d}" if self.mwid != -1 else "-----"
 
     @property
@@ -263,10 +265,10 @@ class Category(_MWXBaseModel):
 
     @icon_id.setter
     def icon_id(self, value: int) -> None:
-        """Must be in [0, 99]."""
-        if not (0 <= value <= 99):
+        """Must be in [0, 999]."""
+        if not (0 <= value <= 999):
             raise ValueError(
-                f"Category icon_id must be between 0 and 99, not '{value}'."
+                f"Category icon_id must be between 0 and 999, not '{value}'."
             )
         self._icon_id = value
 
@@ -337,18 +339,18 @@ class Entry(_MWXBaseModel):
         self.details = details
         self.is_bill = is_bill
 
-        self.amount = amount
-        self.source = source
-        self.target = target
-        self.category = category
-        self.item = item
-
         # 'type' must be immutable after creation
         if ent_type not in (-1, 0, 1):
             raise ValueError(
                 f"Entry type must be -1 (expense), 0 (transfer), or +1 (income), not '{ent_type}'."
             )
         self._type = ent_type
+
+        self.amount = amount
+        self.source = source
+        self.target = target
+        self.category = category
+        self.item = item
 
     @property
     def amount(self) -> float:
@@ -498,4 +500,4 @@ class Entry(_MWXBaseModel):
         pass
 
     def __str__(self) -> str:
-        return f"[{self.str_mwid}] {self.date:%Y-%m-%d}: {self.amount:8.2f} € <{self.category.code}> ({self.account.repr_name} -> {self.counterpart.repr_name}), {self.item}"
+        return f"[{self.str_mwid}] {self.date:%Y-%m-%d}: {self.amount:8.2f} € <{self.category.code}> ({self.source.repr_name} -> {self.target.repr_name}), '{self.item}'"

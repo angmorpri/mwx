@@ -14,11 +14,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from mwx._legacy_model import Account, Category, Counterpart, Entry, Note
+from mwx.model import Account, Category, Counterpart, Entry
 from mwx.util import find_first
 
 MWXNamespace = namedtuple(
-    "MWXNamespace", ["accounts", "categories", "entries", "notes", "counterparts"]
+    "MWXNamespace",
+    [
+        "accounts",
+        "counterparts",
+        "categories",
+        "entries",
+    ],
 )
 
 MYWALLET_TABLES = [
@@ -68,8 +74,8 @@ def read(path: str | Path) -> None:
     for row in data["tbl_cat"]:
         category = Category(
             mwid=row.category_id,
-            name=row.category_name,
-            _type=TBLCAT_TO_CAT[row.category_is_inc],
+            repr_name=row.category_name,
+            cat_type=TBLCAT_TO_CAT[row.category_is_inc],
             color=row.category_color,
             icon_id=row.category_icon,
         )
@@ -77,8 +83,6 @@ def read(path: str | Path) -> None:
 
     # Categories -- From 'tbl_notes' where 'note_payee_payer == -1'
     # and 'note_text' starts with '[' and ends with ']'
-    # Notes -- From 'tbl_notes' where else
-    notes = []
     for row in data["tbl_notes"]:
         if (
             row.note_payee_payer == -1
@@ -86,23 +90,18 @@ def read(path: str | Path) -> None:
             and row.note_text.endswith("]")
         ):
             category = Category(
-                mwid=-row.notey_id,
-                name=row.note_text[1:-1],
-                _type=0,
+                mwid=row.notey_id,
+                repr_name=row.note_text[1:-1],
+                cat_type=0,
             )
             categories.append(category)
-        else:
-            note = Note(
-                mwid=row.notey_id,
-                text=row.note_text,
-                _type=TBLNOTES_TO_NOTES[row.note_payee_payer],
-            )
-        notes.append(note)
 
     # Entries - Transactions -- From 'tbl_trans'
     entries = []
     counterparts = []
     for row in data["tbl_trans"]:
+        if row.exp_is_paid == 0:
+            continue  # Skip unpaid entries
         entry_type = TBLTRANS_TO_ENTRY[row.exp_is_debit]
         counterpart = find_first(counterparts, name=row.exp_payee_name)
         if counterpart is None:
@@ -117,13 +116,12 @@ def read(path: str | Path) -> None:
             mwid=row.exp_id,
             amount=row.exp_amount,
             date=datetime.strptime(row.exp_date, "%Y%m%d"),
-            _type=entry_type,
-            _source=source,
-            _target=target,
+            ent_type=entry_type,
+            source=source,
+            target=target,
             category=category,
             item=item,
             details=details,
-            is_paid=bool(row.exp_is_paid),
             is_bill=bool(row.exp_is_bill),
         )
         entries.append(entry)
@@ -136,26 +134,24 @@ def read(path: str | Path) -> None:
         category = _get_category(0, raw_category[1:-1], categories)
         item, details = _itemize(_notes)
         entry = Entry(
-            mwid=-row.trans_id,
+            mwid=row.trans_id,
             amount=row.trans_amount,
             date=datetime.strptime(row.trans_date, "%Y%m%d"),
-            _type=0,
-            _source=source,
-            _target=target,
+            ent_type=0,
+            source=source,
+            target=target,
             category=category,
             item=item,
             details=details,
-            is_paid=True,
             is_bill=False,
         )
         entries.append(entry)
 
     return MWXNamespace(
         accounts=list(sorted(accounts)),
+        counterparts=list(sorted(counterparts)),
         categories=list(sorted(categories)),
-        notes=notes,
         entries=list(sorted(entries)),
-        counterparts=counterparts,
     )
 
 
@@ -190,8 +186,8 @@ def _get_source_target(
     if account is None:
         account = Account(
             mwid=acc_mwid,
-            name=f"_LEGACY{acc_mwid:02d}_",
-            legacy=True,
+            name=f"LEGACY{acc_mwid:02d}",
+            is_legacy=True,
         )
         accounts.append(account)
     if entry_type in (0, -1):
@@ -214,20 +210,19 @@ def _get_category(
         if category is None:
             category = Category(
                 mwid=cat_id,
-                name=f"_LEGACY{cat_id:02d}_",
-                _type=entry_type,
-                legacy=True,
+                repr_name=f"X{cat_id:02d}. LEGACY {cat_id}",
+                cat_type=entry_type,
+                is_legacy=True,
             )
             categories.append(category)
     elif isinstance(cat_id, str):
-        category = find_first(categories, name=cat_id)
+        category = find_first(categories, repr_name=cat_id)
         if category is None:
-            _aux = len([c for c in categories if c.mwid >= 900])
             category = Category(
-                mwid=999 - _aux,
-                name=f"_LEGACY_{cat_id}_",
-                _type=entry_type,
-                legacy=True,
+                mwid=0,
+                repr_name="X00. LEGACY",
+                cat_type=entry_type,
+                is_legacy=True,
             )
             categories.append(category)
     return category

@@ -7,7 +7,7 @@ Proporciona un modelo de datos para manipular toda la información de la app des
 
 ## Modelo de datos
 
-Todos los datos de MiBilletera son representados mediante 3 entidades principales (`Account`, `Category`, `Entry`) y 1 auxiliar (`Counterpart`).
+Todos los datos de MiBilletera son representados mediante 4 entidades: `Account`, `Counterpart`, `Category`, `Entry`.
 
 #### Clase base
 
@@ -19,8 +19,8 @@ Todas las entidades heredan de la clase base `_MWXBaseModel`. Ésta define:
 
 Y requiere definir en las subclases:
 
-* **Identificador unívoco**, `id`. Debe ser un identificador textual unívoco de la entidad en **todo** el modelo de datos. Será usado para los métodos de comparación y representación.
-* Métodos `to_json()` y `to_mywallet()`, para representar en formato JSON y en formato MiBilletera, respectivamente.
+* **Lave de comparación**, `sorting_key`. Debe ser una clave que permita comparar entidades del **todo** el modelo de datos (incluso entre entidades distintas).
+* Métodos `to_dict()` y `to_mywallet()`, para representar en formato JSON y en formato MiBilletera, respectivamente.
 
 ### Entidades principales
 
@@ -28,7 +28,7 @@ Y requiere definir en las subclases:
 
 Representa una cuenta contable, almacén físico o lógico de dinero.
 
-* **`id`**, se forma mediante `order` y `name`.
+* **`sorting_key`**, se forma mediante `order` y `name`.
 * **`name`**, nombre de la cuenta. **NO** puede contener espacios en blanco, y la primera letra debe ser mayúscula.
 * **`@repr_name`**, nombre de la cuenta para su representación.
 * **`order`**, indicador numérico del orden de representación en la interfaz de MiBilletera. Debe estar entre 1 y 999.
@@ -36,11 +36,21 @@ Representa una cuenta contable, almacén físico o lógico de dinero.
 * **`is_visible`**, indica si aparece visible (`True`) u oculta (`False`) en la interfaz de MiBilletera. Por defecto, serán visibles.
 * **`is_legacy`**, indica si es una cuenta _legado_, es decir, que ya no está en uso, pero sigue habiendo entradas que la utilizan.
 
+Define un atributo de clase, `_GLOBAL_ORDER`, para mantener cuál es el mayor índice de orden, en caso de que tenga que asignar uno nuevo por defecto.
+
+#### `Counterpart`
+
+Contraparte de un ingreso o un gasto, es decir, pagador, o pagado.
+
+* **`sorting_key`**, se formará mediante la tupla (999, `name`).
+* **`name`**, nombre de la contraparte.
+* **`@repr_name`**, igual que `name`, definido para que sea compatible con `Account`.
+
 #### `Category`
 
 Representa una categoría contable, en la que se puede clasificar cada entrada.
 
-* **`id`**, es equivalente a su código (`code`).
+* **`sorting_key`**, es equivalente a su código (`code`).
 * **`code`**, es el código identificativo de la categoría. Se compone de una letra mayúscula seguida de dos dígitos.
 * **`name`**, es el nombre de la categoría.
 * **`@repr_name`**, nombre de la categoría para su representación. Toma la forma "`<code>. <name>`".
@@ -53,8 +63,7 @@ Representa una categoría contable, en la que se puede clasificar cada entrada.
 
 Representa una entrada contable, una cantidad de dinero que en una fecha exacta entra, sale o se mueve entre cuentas y contrapartes, es categorizable, y posee un concepto claro.
 
-* **`id`**, está compuesto de `date` y `day_id`.
-* **`day_id`**, identificador numérico de la entrada en un mismo día. Dependerá del orden en el que se registraron en la app.
+* **`sorting_key`**, está compuesto de `date`, `mwid` y un valor aleatorio.
 * **`amount`**, cantidad de dinero en movimiento. Siempre es un valor positivo que debe estar ajustado a dos decimales.
 * **`date`**, fecha exacta en la que sucede el movimiento. Debe ser un `datetime` con año, mes y día.
 * **`type`**, tipo de entrada, que puede ser: 0 = traslado, -1 = gasto; +1 = ingreso. Es **inmutable**.
@@ -69,13 +78,3 @@ Define, además, los siguientes métodos:
 
 * **`has_account(account)`**, devuelve `True` si la entrada tiene, como origen o destino, la cuenta `account`, que puede ser un objeto tipo `Account`, o el nombre de una cuenta.
 * **`flow(account)`**, devuelve +1, 0 o -1, en función de hacia dónde viaja el flujo de dinero de la entrada respecto a la cuenta `account`. Si `account` no es una cuenta de esta entrada, se devuelve 0; en cualquier otro caso, siempre se devolverá -1 o +1.
-
-### Entidades secundarias
-
-#### `Counterpart`
-
-Contraparte de un ingreso o un gasto, es decir, pagador, o pagado.
-
-* **`id`**, se forma mediante `999` y `name`.
-* **`name`**, nombre de la contraparte.
-* **`@repr_name`**, igual que `name`, definido para que sea compatible con `Account`.
