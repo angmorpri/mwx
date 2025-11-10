@@ -1,402 +1,363 @@
-# 2025/08/21
+# 2025/11/10
 """
-model.py - Defines the data model for the application.
+model.py - Model definitions for MWX entities.
 
-Includes Account, Category, Entry and Note.
+Defines Account, Counterpart, Category and Entry.
 
 """
 
 from __future__ import annotations
 
+import random
 import re
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import ClassVar
+from typing import Any
 
-RGB_REGEX = re.compile(r"^#([0-9A-Fa-f]{6})$")
-WHITESPACE_REGEX = re.compile(r"\s")
-CATEGORY_NAME_REGEX = re.compile(r"^[A-Za-z]\d{2}\. .+$")
-
-CATEGORY_TYPES = {
-    -1: "Expense",
-    0: "Transfer",
-    1: "Income",
-}
+RGB_REGEX = re.compile(r"^#([0-9a-fA-F]{6})$")
+CATEGORY_FULL_REGEX = re.compile(r"^[A-Za-z]\d{2}\. .+$")
+CATEGORY_CODE_REGEX = re.compile(r"^[A-Za-z]\d{2}$")
 
 
-@dataclass
-class Account:
-    """Account
+class _MWXBaseModel(ABC):
+    """Base class for MWX models.
 
-    'mwid' is the ID the accounts has in MyWallet.
-    'name' cannot contain whitespaces.
-    'order' defaults to the highest order found +1.
-    'color' is checked to ensure it has '#RRGGBB' format.
-    'legacy' is used for accounts that no longer exist, but still appear in
-    some entries.
+    Defines:
+    - mwid attribute, for identification of entities in MyWallet app.
+    - Comparison methods '__eq__' and '__lt__' based on abstract property
+    'sorting_key'.
+    - Representation method '__repr__'.
+
+    Requires subclasses to implement:
+    - 'sorting_key' property, for comparison operations.
+    - 'to_dict()' method, for serialization to dictionary.
+    - 'to_mywallet()' method, for conversion to MyWallet format.
 
     """
 
-    mwid: int
-    name: str
-    order: int = -1
-    color: str = "#000000"
-    is_visible: bool = True
-    legacy: bool = False
+    def __init__(self, mwid: int) -> None:
+        self.mwid = mwid
+        self.str_mwid = f"{self.mwid:05d}" if self.mwid != -1 else "-----"
 
-    HIGHEST_ORDER: ClassVar[int] = 0
+    @property
+    @abstractmethod
+    def sorting_key(self) -> tuple[Any, ...]:
+        """Abstract property for sorting key."""
+        pass
 
-    def __post_init__(self) -> None:
-        """Adjust and validate the account data."""
-        # Name check
-        if WHITESPACE_REGEX.search(self.name):
+    def __eq__(self, other: _MWXBaseModel) -> bool:
+        if not isinstance(other, _MWXBaseModel):
+            return NotImplemented
+        return self.sorting_key == other.sorting_key
+
+    def __lt__(self, other: _MWXBaseModel) -> bool:
+        if not isinstance(other, _MWXBaseModel):
+            return NotImplemented
+        return self.sorting_key < other.sorting_key
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} mwid={self.mwid}>"
+
+
+# Entities
+
+
+class Account(_MWXBaseModel):
+    """Account entity."""
+
+    _GLOBAL_ORDER = 100
+
+    def __init__(
+        self,
+        mwid: int,
+        name: str,
+        order: int = -1,
+        color: str = "#000000",
+        is_visible: bool = True,
+        is_legacy: bool = False,
+    ) -> None:
+        super().__init__(mwid)
+        self._name = None
+        self._order = None
+        self._color = None
+        self.is_visible = is_visible
+        self.is_legacy = is_legacy
+
+        self.name = name
+        self.order = order
+        self.color = color
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        """Must not have spaces and first letter capitalized."""
+        if " " in value:
             raise ValueError(
-                f"Attempt to create an Account with a name that contains whitespaces: {self.name}"
+                f"Account name cannot contain spaces, '{value}' introduced."
             )
-
-        # Color check
-        if not RGB_REGEX.match(self.color):
-            raise ValueError(
-                f"Attempt to create an Account with invalid color format: {self.color}"
-            )
-
-        # Order adjustments
-        if self.order == -1:
-            Account.HIGHEST_ORDER += 1
-            self.order = Account.HIGHEST_ORDER
-        Account.HIGHEST_ORDER = max(Account.HIGHEST_ORDER, self.order)
-
-    # Comparison
-
-    def __eq__(self, other: Account | Counterpart | str) -> bool:
-        """
-        Two accounts are equal if they have the same name.
-        Can be compared to Counterparts or strings, will always return False.
-
-        """
-        if isinstance(other, Account):
-            return self.name == other.name
-        elif isinstance(other, (Counterpart, str)):
-            return False
-        return NotImplemented
-
-    def __lt__(self, other: Account | Counterpart | str) -> bool:
-        """
-        Accounts are compared by their orders.
-        When compared against counterparts, accounts should always come first.
-        """
-        if isinstance(other, Account):
-            return self.order < other.order
-        elif isinstance(other, (Counterpart, str)):
-            return True
-        return NotImplemented
-
-    # Representation
-
-    def __str__(self) -> str:
-        """String representation of the account."""
-        s = f"Account[{self.mwid:0>4}]('{self.name}', '{self.color}', {self.order}, {int(self.is_visible)})"
-        if self.legacy:
-            s = "Legacy" + s
-        return s
+        self._name = value[0].upper() + value[1:]
 
     @property
     def repr_name(self) -> str:
-        """Name used for representation"""
-        return "@" + self.name
+        return "@" + self._name
 
+    @property
+    def order(self) -> int:
+        return self._order
 
-@dataclass
-class Counterpart:
-    """Counterpart
+    @order.setter
+    def order(self, value: int) -> None:
+        """Must be in [0, 999], or -1 for auto-assignment."""
+        if value < 0:
+            self._order = Account._GLOBAL_ORDER
+            Account._GLOBAL_ORDER += 1
+        elif value > 999:
+            raise ValueError(f"Account order must be between 0 and 999, not '{value}'.")
+        else:
+            self._order = value
+            Account._GLOBAL_ORDER = max(Account._GLOBAL_ORDER, value + 1)
 
-    Analogue of Account, used to allow both Account and Counterpart to be used
-    indistinctly in sources and targets of Entries.
+    @property
+    def color(self) -> str:
+        return self._color
 
-    """
+    @color.setter
+    def color(self, value: str) -> None:
+        """Must be a valid hex color code."""
+        if not RGB_REGEX.match(value):
+            raise ValueError(
+                f"Account color must be a valid hex color code, not '{value}'."
+            )
+        self._color = value
 
-    name: str
+    @property
+    def sorting_key(self) -> tuple[Any, ...]:
+        return ("A", self.order, self.name)
 
-    # Comparison
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mwid": self.mwid,
+            "name": self.name,
+            "order": self.order,
+            "color": self.color,
+            "is_visible": self.is_visible,
+            "is_legacy": self.is_legacy,
+        }
 
-    def __eq__(self, other: Account | Counterpart | str) -> bool:
-        """
-        Two counterparts or strings are equal if they have the same name.
-        Can be compared to Accounts, will always return False.
-
-        """
-        if isinstance(other, Counterpart):
-            return self.name == other.name
-        elif isinstance(other, str):
-            return self.name == other
-        elif isinstance(other, Account):
-            return False
-        return NotImplemented
-
-    def __lt__(self, other: Account | Counterpart | str) -> bool:
-        """
-        Compares counterparts or strings based on their names.
-        When compared against accounts, counterparts should always come last.
-        """
-        if isinstance(other, Counterpart):
-            return self.name < other.name
-        elif isinstance(other, str):
-            return self.name < other
-        elif isinstance(other, Account):
-            return False
-        return NotImplemented
-
-    # Representation
+    def to_mywallet(self) -> dict[str, Any]:
+        # TODO
+        pass
 
     def __str__(self) -> str:
-        return f"Counterpart('{self.name}')"
+        legacy = " [LEGACY]" if self.is_legacy else ""
+        return (
+            f"[{self.str_mwid}] {self.repr_name} ({self.order}, {self.color}){legacy}"
+        )
+
+
+class Counterpart(_MWXBaseModel):
+    """Counterpart entity, either payer or payee."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(0)
+        self.name = name
 
     @property
     def repr_name(self) -> str:
         return self.name
 
+    @property
+    def sorting_key(self) -> tuple[Any, ...]:
+        return ("A", 999, self.name)
 
-@dataclass
-class Category:
-    """Category
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mwid": self.mwid,
+            "name": self.name,
+        }
 
-    'mwid' is the ID the category has in MyWallet. It'll be positive for
-    transaction categories, and negative for transfer categories.
-    'name' needs to follow the format "X##. Category Name", where 'X' can be
-    any letter, and '#' must be digits.
-    'type' is the type of the category, one of -1=Expense, +1=Income, or
-    0=Transfer.
-    'color' is checked to ensure it has '#RRGGBB' format.
-    'legacy' is used for categories that no longer exist, but still appear in
-    some entries.
+    def to_mywallet(self) -> dict[str, Any]:
+        # TODO
+        pass
 
-    """
+    def __str__(self) -> str:
+        return f"[{self.str_mwid}] {self.repr_name}"
 
-    mwid: int
-    name: str
-    _type: int  # Cannot change
-    color: str = "#000000"
-    icon_id: int = 0
-    legacy: bool = False
 
-    def __post_init__(self) -> None:
-        """Adjust and validate the category data."""
-        # MWID check
-        if self._type == 0:
-            self.mwid = -abs(self.mwid)
+class Category(_MWXBaseModel):
+    """Category entity."""
 
-        # Name check
-        if not CATEGORY_NAME_REGEX.match(self.name):
+    def __init__(
+        self,
+        mwid: int,
+        repr_name: str,
+        cat_type: int,
+        icon_id: int = 0,
+        color: str = "#000000",
+        is_legacy: bool = False,
+    ) -> None:
+        super().__init__(mwid)
+        self._code = None
+        self._name = None
+        self._type = None
+        self._icon_id = None
+        self._color = None
+        self.is_legacy = is_legacy
+
+        self.repr_name = repr_name
+        self.icon_id = icon_id
+        self.color = color
+
+        # 'type' must be immutable after creation
+        if cat_type not in (-1, 0, 1):
             raise ValueError(
-                f"Attempt to create a Category with invalid name format: {self.name}"
+                f"Category type must be -1 (expense), 0 (transfer), or +1 (income), not '{cat_type}'."
             )
-
-        # Color check
-        if not RGB_REGEX.match(self.color):
-            raise ValueError(
-                f"Attempt to create a Category with invalid color format: {self.color}"
-            )
+        self._type = cat_type
 
     @property
     def code(self) -> str:
-        """Get the category code."""
-        return self.name.split(".")[0]
+        return self._code
 
     @code.setter
     def code(self, value: str) -> None:
-        """Set the category code."""
-        new_name = f"{value}. {self.title}"
-        # Validate new name
-        if not CATEGORY_NAME_REGEX.match(new_name):
-            raise ValueError(
-                f"Attempt to set category code with invalid name format: {new_name}"
-            )
-        self.name = new_name
+        """Must match CATEGORY_REGEX."""
+        if not CATEGORY_CODE_REGEX.match(value):
+            raise ValueError(f"Category code must match pattern 'Xnn', not '{value}'.")
+        self._code = value
 
     @property
-    def title(self) -> str:
-        """Get the category title."""
-        return self.name.split(". ")[1]
+    def name(self) -> str:
+        return self._name
 
-    @title.setter
-    def title(self, value: str) -> None:
-        """Set the category title."""
-        new_name = f"{self.code}. {value}"
-        # Validate new name
-        if not CATEGORY_NAME_REGEX.match(new_name):
-            raise ValueError(
-                f"Attempt to set category title with invalid name format: {new_name}"
-            )
-        self.name = new_name
+    @name.setter
+    def name(self, value: str) -> None:
+        """Must have first letter capitalized."""
+        self._name = value[0].upper() + value[1:]
 
     @property
-    def type(self) -> int:
-        return self._type
+    def repr_name(self) -> str:
+        return f"{self._code}. {self._name}"
 
-    # Comparison
-
-    def __eq__(self, other: Category) -> bool:
-        """Two categories are equal if they have the same name."""
-        if not isinstance(other, Category):
-            return NotImplemented
-        return self.name == other.name
-
-    def __lt__(self, other: Category) -> bool:
-        """Two categories are less than each other if their names are lexicographically ordered."""
-        if not isinstance(other, Category):
-            return NotImplemented
-        return self.name < other.name
-
-    # Representation
-
-    def __str__(self) -> str:
-        s = f"Category[{self.mwid:0>4}]('{self.name}', {CATEGORY_TYPES[self.type]}, '{self.color}', {self.icon_id})"
-        if self.legacy:
-            s = "Legacy" + s
-        return s
-
-
-@dataclass
-class Note:
-    """Notes that can be attached to entries.
-
-    'type' can be +1=Payer, -1=Payee, 0=Neutral.
-
-    """
-
-    mwid: int
-    text: str
-    _type: int  # Cannot change
+    @repr_name.setter
+    def repr_name(self, value: str) -> None:
+        """Must be '<code>. <name>'"""
+        if not CATEGORY_FULL_REGEX.match(value):
+            raise ValueError(
+                f"Category repr_name must match pattern 'Xnn. Name', not '{value}'."
+            )
+        code_part, name_part = value.split(". ", 1)
+        self.code = code_part
+        self.name = name_part
 
     @property
     def type(self) -> int:
         return self._type
 
-    def __eq__(self, other: Note) -> bool:
-        """Two notes are equal if their texts match."""
-        if not isinstance(other, Note):
-            return NotImplemented
-        return self.text == other.text
+    @property
+    def icon_id(self) -> int:
+        return self._icon_id
 
-    def __lt__(self, other: Note) -> bool:
-        """Two notes are less than each other based on their texts."""
-        if not isinstance(other, Note):
-            return NotImplemented
-        return self.text < other.text
+    @icon_id.setter
+    def icon_id(self, value: int) -> None:
+        """Must be in [0, 99]."""
+        if not (0 <= value <= 99):
+            raise ValueError(
+                f"Category icon_id must be between 0 and 99, not '{value}'."
+            )
+        self._icon_id = value
+
+    @property
+    def color(self) -> str:
+        return self._color
+
+    @color.setter
+    def color(self, value: str) -> None:
+        """Must be a valid hex color code."""
+        if not RGB_REGEX.match(value):
+            raise ValueError(
+                f"Category color must be a valid hex color code, not '{value}'."
+            )
+        self._color = value
+
+    @property
+    def sorting_key(self) -> tuple[Any, ...]:
+        return (
+            "C",
+            self.code,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mwid": self.mwid,
+            "code": self.code,
+            "name": self.name,
+            "type": self.type,
+            "icon_id": self.icon_id,
+            "color": self.color,
+            "is_legacy": self.is_legacy,
+        }
+
+    def to_mywallet(self) -> dict[str, Any]:
+        # TODO
+        pass
 
     def __str__(self) -> str:
-        return f"Note[{self.mwid:0>4}]('{self.text}', {self.type})"
+        legacy = " [LEGACY]" if self.is_legacy else ""
+        return f"[{self.str_mwid}] {self.repr_name} ({self.type}, {self.icon_id}, {self.color}){legacy}"
 
 
-@dataclass
-class Entry:
-    """Entry in the record.
+class Entry(_MWXBaseModel):
+    """Entry entity, either income, expense or transfer between accounts."""
 
-    Entries can be either transactions (incomes or expenses) or transfers.
+    def __init__(
+        self,
+        mwid: int,
+        amount: float,
+        date: datetime,
+        ent_type: int,
+        source: Account | Counterpart,
+        target: Account | Counterpart,
+        category: Category,
+        item: str = "",
+        details: str = "",
+        is_bill: bool = False,
+    ) -> None:
+        super().__init__(mwid)
+        self._amount = None
+        self.date = date
+        self._type = None
+        self._source = None
+        self._target = None
+        self._category = None
+        self._item = None
+        self.details = details
+        self.is_bill = is_bill
 
-    'id' is a unique identifier for the entry.
-    'mwid' is the ID the entry has in MyWallet. It'll be positive for
-    transactions and negative for transfers.
+        self.amount = amount
+        self.source = source
+        self.target = target
+        self.category = category
+        self.item = item
 
-    'type' indicates the type of the entry, either income (1), expense (-1),
-    or transfer (0).
-
-    'source' and 'target' can either be (Account, Counterpart), for expenses;
-    (Counterpart, Account), for incomes; and (Account, Account) for transfers.
-    This must align with the entry's type, and must not change during the
-    entry lifecycle. Using strings for either 'source' or 'target' will convert
-    them into Counterpart objects.
-
-    'category' type must match entries type.
-
-    'item' will default to the category title if empty.
-
-    'in_day_order' is the amount of entries in that day when this entry
-    arrived.
-
-    """
-
-    mwid: int
-    amount: float
-    date: datetime
-    _type: int  # Cannot change
-    _source: Account | Counterpart | str  # Cannot change
-    _target: Account | Counterpart | str  # Cannot change
-    category: Category
-    item: str = ""
-    details: str = ""
-    is_paid: bool = True
-    is_bill: bool = False
-    in_day_order: int = -1
-
-    DAY_TOTALS: ClassVar[dict[datetime, int]] = {}
-
-    def __post_init__(self) -> None:
-        """Adjust and validate the entry data."""
-        # MWID check
-        if self._type == 0:
-            self.mwid = -abs(self.mwid)
-
-        # Round amount
-        self.amount = round(self.amount, 2)
-
-        # Convert string sources/targets to Counterpart objects
-        self._source = (
-            Counterpart(self._source) if isinstance(self._source, str) else self._source
-        )
-        self._target = (
-            Counterpart(self._target) if isinstance(self._target, str) else self._target
-        )
-
-        # Check source and target against type
-        if self._type == 0:
-            if not isinstance(self._source, Account):
-                raise ValueError(
-                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
-                    f"an Account as source"
-                )
-            if not isinstance(self._target, Account):
-                raise ValueError(
-                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
-                    f"an Account as target"
-                )
-        elif self._type == +1:
-            if not isinstance(self._source, Counterpart):
-                raise ValueError(
-                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
-                    f"a Counterpart as source"
-                )
-            if not isinstance(self._target, Account):
-                raise ValueError(
-                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
-                    f"an Account as target"
-                )
-        elif self._type == -1:
-            if not isinstance(self._source, Account):
-                raise ValueError(
-                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
-                    f"an Account as source"
-                )
-            if not isinstance(self._target, Counterpart):
-                raise ValueError(
-                    f"Entry of type '{CATEGORY_TYPES[self._type]}' must have "
-                    f"a Counterpart as target"
-                )
-
-        # Check category's type matches this type
-        if self.category.type != int(self._type):
+        # 'type' must be immutable after creation
+        if ent_type not in (-1, 0, 1):
             raise ValueError(
-                f"Entry of type {CATEGORY_TYPES[self._type]} cannot have "
-                f"category of type {CATEGORY_TYPES[self.category.type]}"
+                f"Entry type must be -1 (expense), 0 (transfer), or +1 (income), not '{ent_type}'."
             )
+        self._type = ent_type
 
-        # Adjust item
-        if not self.item:
-            self.item = self.category.title
+    @property
+    def amount(self) -> float:
+        return self._amount
 
-        # Setup day order
-        self.in_day_order = Entry.DAY_TOTALS.get(self.date, 0) + 1
-        Entry.DAY_TOTALS[self.date] = self.in_day_order
+    @amount.setter
+    def amount(self, value: float) -> None:
+        """Amount must be positive, and gets rounded to 2 decimal places."""
+        self._amount = abs(round(value, 2))
 
     @property
     def type(self) -> int:
@@ -407,20 +368,24 @@ class Entry:
         return self._source
 
     @source.setter
-    def source(self, value: Account | Counterpart | str) -> None:
-        value = Counterpart(value) if isinstance(value, str) else value
-        if self._type in (0, -1):
-            if not isinstance(value, Account):
-                raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
-                    f"an Account as source"
-                )
-        if self._type == +1:
-            if not isinstance(value, Counterpart):
-                raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
-                    f"a Counterpart as source"
-                )
+    def source(self, value: Account | Counterpart) -> None:
+        """Checks source alignes with entry type.
+
+        If type is expense (-1) or transfer (0), source must be an Account.
+        If type is income (+1), source must be a Counterpart.
+        Source cannot be the same as target.
+
+        """
+        if self.type in (-1, 0) and not isinstance(value, Account):
+            raise ValueError(
+                f"Entry source must be an Account for expense or transfer entries, not '{type(value)}'."
+            )
+        if self.type == 1 and not isinstance(value, Counterpart):
+            raise ValueError(
+                f"Entry source must be a Counterpart for income entries, not '{type(value)}'."
+            )
+        if value == self.target:
+            raise ValueError("Entry source cannot be the same as target.")
         self._source = value
 
     @property
@@ -428,82 +393,109 @@ class Entry:
         return self._target
 
     @target.setter
-    def target(self, value: Account | Counterpart | str) -> None:
-        value = Counterpart(value) if isinstance(value, str) else value
-        if self._type in (0, +1):
-            if not isinstance(value, Account):
-                raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
-                    f"an Account as target"
-                )
-        if self._type == -1:
-            if not isinstance(value, Counterpart):
-                raise ValueError(
-                    f"Entry of type {CATEGORY_TYPES[self._type]} must have "
-                    f"a Counterpart as target"
-                )
+    def target(self, value: Account | Counterpart) -> None:
+        """Checks target alignes with entry type.
+
+        If type is income (+1) or transfer (0), target must be an Account.
+        If type is expense (-1), target must be a Counterpart.
+        Target cannot be the same as source.
+
+        """
+        if self.type in (1, 0) and not isinstance(value, Account):
+            raise ValueError(
+                f"Entry target must be an Account for income or transfer entries, not '{type(value)}'."
+            )
+        if self.type == -1 and not isinstance(value, Counterpart):
+            raise ValueError(
+                f"Entry target must be a Counterpart for expense entries, not '{type(value)}'."
+            )
+        if value == self.source:
+            raise ValueError("Entry target cannot be the same as source.")
         self._target = value
 
     @property
-    def id(self) -> str:
-        return f"{self.date:%Y%m%d}{self.in_day_order:0>4}"
+    def category(self) -> Category:
+        return self._category
 
-    # Utility
+    @category.setter
+    def category(self, cat: Category) -> None:
+        """Category type must align with entry type."""
+        if cat.type != self.type:
+            raise ValueError(
+                f"Entry category type '{cat.type}' does not match entry type '{self.type}'."
+            )
+        self._category = cat
+
+    @property
+    def item(self) -> str:
+        return self._item
+
+    @item.setter
+    def item(self, value: str | None) -> None:
+        """If empty or None, set to 'Sin concepto'"""
+        self._item = "Sin concepto" if not value else value
 
     def has_account(self, account: Account | str) -> bool:
-        """Checks if the entry involves the given account"""
-        if isinstance(account, Account):
-            account = account.name
-        return self.source.name == account or self.target.name == account
+        """Checks if the entry involves the given account."""
+        if isinstance(account, str):
+            return account in (self.source.repr_name, self.target.repr_name)
+        elif isinstance(account, Account):
+            return account in (self.source, self.target)
+        else:
+            raise ValueError(
+                "'account' argument must be an Account instance or an account name."
+            )
 
-    def tflow(self, pov: Account | str) -> int:
-        """Transfer flow with respect to the given account.
+    def flow(self, account: Account | str) -> int:
+        """Returns the flow of money from the point of view of the
+        given account.
 
-        +1 if the entry is a transfer into the account.
-        -1 if the entry is a transfer out of the account.
-         0 if the entry is not a transfer or does not involve the account.
+        If it receives money, return +1; if it sends money, return -1. If the
+        account is not involved, return 0.
 
         """
-        if self.type != 0:
-            return 0
-        if isinstance(pov, Account):
-            pov = pov.name
-        if self.source.name == pov:
-            return -1
-        elif self.target.name == pov:
-            return +1
+        if isinstance(account, str):
+            acc_name = account
+            if self.source.repr_name == acc_name:
+                return -1
+            elif self.target.repr_name == acc_name:
+                return +1
+            else:
+                return 0
+        elif isinstance(account, Account):
+            acc = account
+            if self.source == acc:
+                return -1
+            elif self.target == acc:
+                return +1
+            else:
+                return 0
         else:
-            return 0
+            raise ValueError(
+                "'account' argument must be an Account instance or an account name."
+            )
 
-    # Comparison
+    @property
+    def sorting_key(self) -> tuple[Any, ...]:
+        return ("T", self.date, self.mwid, random.random())
 
-    def __eq__(self, other: Entry) -> bool:
-        """Two entries are equal if their IDs match."""
-        if not isinstance(other, Entry):
-            return NotImplemented
-        return self.id == other.id
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mwid": self.mwid,
+            "amount": self.amount,
+            "date": self.date.isoformat(),
+            "type": self.type,
+            "source": self.source.to_dict(),
+            "target": self.target.to_dict(),
+            "category": self.category.to_dict(),
+            "item": self.item,
+            "details": self.details,
+            "is_bill": self.is_bill,
+        }
 
-    def __lt__(self, other: Entry) -> bool:
-        """Two entries are less than each other based on their IDs."""
-        if not isinstance(other, Entry):
-            return NotImplemented
-        return self.id < other.id
-
-    # Representation
+    def to_mywallet(self) -> dict[str, Any]:
+        # TODO
+        pass
 
     def __str__(self) -> str:
-        s = f"Entry[{self.mwid:0>5}]"
-
-        # Amount sign
-        if self.type >= 0.5:
-            samount = f"+{abs(self.amount):8.2f}"
-        elif self.type <= -0.5:
-            samount = f"-{abs(self.amount):8.2f}"
-        else:
-            samount = f"~{abs(self.amount):8.2f}"
-
-        s += f"({self.date:%Y-%m-%d} # {samount:>} # {self.source.repr_name} --> {self.target.repr_name} [{self.category.code}] '{self.item}')"
-        return s
-
-
-MWXItem = Account | Counterpart | Category | Note | Entry
+        return f"[{self.str_mwid}] {self.date:%Y-%m-%d}: {self.amount:8.2f} € <{self.category.code}> ({self.account.repr_name} -> {self.counterpart.repr_name}), {self.item}"

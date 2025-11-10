@@ -12,31 +12,35 @@ from mwx.model import Account, Category, Counterpart, Entry
 
 @pytest.fixture(autouse=True)
 def clean_account_global_order():
-    Account.HIGHEST_ORDER = 0
+    Account._GLOBAL_ORDER = 100
 
 
 # Account
 
 
-def test_account_bad_name():
+def test_account_bad_attributes():
+    # Name with whitespace
     with pytest.raises(ValueError):
         Account(-1, "Mi Cuenta", 10)
 
+    # Order higher than 999
+    with pytest.raises(ValueError):
+        Account(-1, "MiCuenta", 1000)
 
-def test_account_bad_color():
+    # Non-hex color
     with pytest.raises(ValueError):
         Account(-1, "MiCuenta", 10, color="green")
 
 
-def test_account_min_args():
+def test_account_defaults():
     acc = Account(-1, "MiCuenta")
     assert acc.mwid == -1
     assert acc.name == "MiCuenta"
-    assert acc.order == 1
+    assert acc.order == 100
     assert acc.color == "#000000"
 
 
-def test_account_multiple():
+def test_account_multiple_order():
     """Create multiple accounts with and without specific order to
     check it is correctly handled.
 
@@ -44,12 +48,12 @@ def test_account_multiple():
     acc1 = Account(-1, "MiCuenta1")
     acc2 = Account(-2, "MiCuenta2", 10)
     acc3 = Account(-3, "MiCuenta3")
-    assert acc1.order == 1
+    assert acc1.order == 100
     assert acc2.order == 10
-    assert acc3.order == 11
+    assert acc3.order == 101
 
 
-def test_account_sorting():
+def test_account_counterpart_sorting():
     # Account - Account
     accs = [Account(-1, "B", 1), Account(-1, "A", 2)]
     accs.sort()
@@ -57,53 +61,91 @@ def test_account_sorting():
     assert accs[1].name == "A"
 
     # Account - Counterpart
-    accs = [Counterpart("Payer"), Account(-1, "Z", 1000)]
+    accs = [Counterpart("Payer"), Account(-1, "Z", 888)]
     accs.sort()
     assert accs[0].name == "Z"
     assert accs[1].name == "Payer"
 
 
+def test_account_to_dict():
+    acc = Account(-1, "MiCuenta", 10, color="#123456")
+    d = acc.to_dict()
+    assert d == {
+        "mwid": -1,
+        "name": "MiCuenta",
+        "order": 10,
+        "color": "#123456",
+        "is_visible": True,
+        "is_legacy": False,
+    }
+
+
+def test_account_str():
+    acc = Account(123, "MiCuenta", 10, is_legacy=True)
+    assert str(acc) == "[00123] @MiCuenta (10, #000000) [LEGACY]"
+
+
+# Counterpart
+
+
+def test_counterpart_ok():
+    cpy = Counterpart("Mi Contraparte")
+    assert cpy.mwid == 0
+    assert cpy.name == "Mi Contraparte"
+
+
+def test_counterpart_str():
+    cpy = Counterpart("Mi Contraparte")
+    assert str(cpy) == "[00000] Mi Contraparte"
+
+
 # Category
 
 
-def test_category_transfer():
-    """Create a transfer category and check the MWID appears negative"""
-    cat = Category(10, "X99. Mi Categoria", 0)
-    assert cat.mwid == -10
-    assert cat.type == 0
-    assert cat.color == "#000000"
-
-
-def test_category_bad_name():
+def test_category_bad_attributes():
+    # Name without format
     with pytest.raises(ValueError):
-        Category(10, "Mi Categoria", 0)
+        Category(-1, "Mi Categoria", 0)
 
-
-def test_category_bad_color():
+    # Only wrong code format
     with pytest.raises(ValueError):
-        Category(10, "X99. Mi Categoria", 0, color="invalid_color")
+        Category(-1, "99X. Mi Categoria", 0)
+
+    # Type not in [-1, 0, 1]
+    with pytest.raises(ValueError):
+        Category(-1, "X99. Mi Categoria", 2)
+
+    # Icon ID out of range
+    with pytest.raises(ValueError):
+        Category(-1, "X99. Mi Categoria", 0, icon_id=100)
+
+    # Invalid color
+    with pytest.raises(ValueError):
+        Category(-1, "X99. Mi Categoria", 0, color="invalid_color")
 
 
-def test_category_modify_code():
+def test_category_modify_code_and_name():
     cat = Category(-1, "X99. Mi Categoria", 1)
     assert cat.code == "X99"
+    assert cat.name == "Mi Categoria"
+    assert cat.repr_name == "X99. Mi Categoria"
 
     cat.code = "Z00"
-    assert cat.name == "Z00. Mi Categoria"
+    assert cat.repr_name == "Z00. Mi Categoria"
+
+    cat.name = "Alternativa"
+    assert cat.repr_name == "Z00. Alternativa"
+
+    cat.repr_name = "Y50. Nueva Categoria"
+    assert cat.code == "Y50"
+    assert cat.name == "Nueva Categoria"
 
     with pytest.raises(ValueError):
-        cat.code = "99X"
-
-
-def test_category_modify_title():
-    cat = Category(-1, "X99. Mi Categoria", 1)
-    assert cat.title == "Mi Categoria"
-
-    cat.title = "Alternativa"
-    assert cat.name == "X99. Alternativa"
+        cat.repr_name = "BadFormatName"
 
 
 def test_category_modify_type():
+    """Type must be immutable after creation"""
     cat = Category(-1, "X99. Mi Categoria", 1)
     assert cat.type == 1
 
@@ -112,10 +154,31 @@ def test_category_modify_type():
 
 
 def test_category_sorting():
-    cats = [Category(-1, "X99. Mi Categoria", 1), Category(-2, "X98. Mi Categoria", 1)]
+    cats = [Category(-1, "X99. Alfa", 1), Category(-2, "X98. Beta", 1)]
     cats.sort()
-    assert cats[0].name == "X98. Mi Categoria"
-    assert cats[1].name == "X99. Mi Categoria"
+    assert cats[0].repr_name == "X98. Beta"
+    assert cats[1].repr_name == "X99. Alfa"
+
+
+def test_category_to_dict():
+    cat = Category(-1, "X99. Mi Categoria", -1, icon_id=10, color="#654321")
+    d = cat.to_dict()
+    assert d == {
+        "mwid": -1,
+        "code": "X99",
+        "name": "Mi Categoria",
+        "type": -1,
+        "icon_id": 10,
+        "color": "#654321",
+        "is_legacy": False,
+    }
+
+
+def test_category_str():
+    cat = Category(
+        123, "X99. Mi Categoria", -1, icon_id=10, color="#654321", is_legacy=True
+    )
+    assert str(cat) == "[00123] X99. Mi Categoria (-1, 10, #654321) [LEGACY]"
 
 
 # Entry

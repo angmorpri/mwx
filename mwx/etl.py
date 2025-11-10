@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from mwx.model import Account, Category, Counterpart, Entry, Note
+from mwx._legacy_model import Account, Category, Counterpart, Entry, Note
 from mwx.util import find_first
 
 MWXNamespace = namedtuple(

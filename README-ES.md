@@ -7,9 +7,9 @@ Proporciona un modelo de datos para manipular toda la información de la app des
 
 ## Modelo de datos
 
-Todos los datos de MiBilletera son representados mediante 3 entidades principales (`Account`, `Category`, `Entry`) y 2 auxiliares (`Counterpart`, `Note`).
+Todos los datos de MiBilletera son representados mediante 3 entidades principales (`Account`, `Category`, `Entry`) y 1 auxiliar (`Counterpart`).
 
-### Clase base
+#### Clase base
 
 Todas las entidades heredan de la clase base `_MWXBaseModel`. Ésta define:
 
@@ -20,14 +20,62 @@ Todas las entidades heredan de la clase base `_MWXBaseModel`. Ésta define:
 Y requiere definir en las subclases:
 
 * **Identificador unívoco**, `id`. Debe ser un identificador textual unívoco de la entidad en **todo** el modelo de datos. Será usado para los métodos de comparación y representación.
+* Métodos `to_json()` y `to_mywallet()`, para representar en formato JSON y en formato MiBilletera, respectivamente.
 
-### `Account`
+### Entidades principales
+
+#### `Account`
 
 Representa una cuenta contable, almacén físico o lógico de dinero.
 
-* **`id`** se forma mediante `order` y `name`.
+* **`id`**, se forma mediante `order` y `name`.
 * **`name`**, nombre de la cuenta. **NO** puede contener espacios en blanco, y la primera letra debe ser mayúscula.
-* **`order`**, indicador numérico del orden de representación en la interfaz de MiBilletera.
-* **`color`**, color asociado a la cuenta, debe tener formato `##RRGGBB`.
-* **`is_visible`**, indica si aparece visible (`True`) u oculta (`False`) en la interfaz de MiBilletera.
+* **`@repr_name`**, nombre de la cuenta para su representación.
+* **`order`**, indicador numérico del orden de representación en la interfaz de MiBilletera. Debe estar entre 1 y 999.
+* **`color`**, color asociado a la cuenta, debe tener formato `#RRGGBB`. Las cuentas sin color tendrán el `#000000`.
+* **`is_visible`**, indica si aparece visible (`True`) u oculta (`False`) en la interfaz de MiBilletera. Por defecto, serán visibles.
 * **`is_legacy`**, indica si es una cuenta _legado_, es decir, que ya no está en uso, pero sigue habiendo entradas que la utilizan.
+
+#### `Category`
+
+Representa una categoría contable, en la que se puede clasificar cada entrada.
+
+* **`id`**, es equivalente a su código (`code`).
+* **`code`**, es el código identificativo de la categoría. Se compone de una letra mayúscula seguida de dos dígitos.
+* **`name`**, es el nombre de la categoría.
+* **`@repr_name`**, nombre de la categoría para su representación. Toma la forma "`<code>. <name>`".
+* **`type`**, indica el tipo de entrada al que representa: 0 = traslado; -1 = gasto; +1 = ingreso. Es **inmutable**.
+* **`icon_id`**, identificador numérico del icono identificativo de la categoría en la interfaz de MiBilletera. Debe estar entre 0 y 99, siendo el 0 reservado para categorías sin icono.
+* **`color`**, color asociado a la categoría, debe tener formato `#RRGGBB`. Las categorías sin color tendrán el `#000000`.
+* **`is_legacy`**, indica si es una categoría *legado*, es decir, que ya no está en uso, pero sigue habiendo entradas que la utilizan.
+
+#### `Entry`
+
+Representa una entrada contable, una cantidad de dinero que en una fecha exacta entra, sale o se mueve entre cuentas y contrapartes, es categorizable, y posee un concepto claro.
+
+* **`id`**, está compuesto de `date` y `day_id`.
+* **`day_id`**, identificador numérico de la entrada en un mismo día. Dependerá del orden en el que se registraron en la app.
+* **`amount`**, cantidad de dinero en movimiento. Siempre es un valor positivo que debe estar ajustado a dos decimales.
+* **`date`**, fecha exacta en la que sucede el movimiento. Debe ser un `datetime` con año, mes y día.
+* **`type`**, tipo de entrada, que puede ser: 0 = traslado, -1 = gasto; +1 = ingreso. Es **inmutable**.
+* **`source`**, origen del movimiento. Si es una cuenta (`Account`), hablamos de un gasto o traslado; si es una contraparte (`Counterpart`), hablamos de un ingreso o traslado. Debe respetar el tipo de entrada. Nunca puede ser contraparte si el destino es contraparte. Nunca puede ser igual que `target`.
+* **`target`**, destino del movimiento. Si es una cuenta (`Account`), hablamos de un ingreso o traslado; si es una contraparte (`Counterpart`), hablamos de un gasto o traslado. Debe respetar el tipo de entrada. Nunca puede ser contraparte si el origen es contraparte. Nunca puede ser igual que `source`.
+* **`category`**, categoría asociada a la entrada. Debe ser tipo `Category`, siendo el tipo de ésta igual al de la entrada.
+* **`item`**, concepto de la entrada, en forma de cadena de caracteres. Si fuera a ser nulo, debería sustituirse por "Sin concepto".
+* **`details`**, detalles adicionales opcionales, en forma de cadena de caracteres.
+* **`is_bill`**, indica si es una entrada que provino de una factura recurrente.
+
+Define, además, los siguientes métodos:
+
+* **`has_account(account)`**, devuelve `True` si la entrada tiene, como origen o destino, la cuenta `account`, que puede ser un objeto tipo `Account`, o el nombre de una cuenta.
+* **`flow(account)`**, devuelve +1, 0 o -1, en función de hacia dónde viaja el flujo de dinero de la entrada respecto a la cuenta `account`. Si `account` no es una cuenta de esta entrada, se devuelve 0; en cualquier otro caso, siempre se devolverá -1 o +1.
+
+### Entidades secundarias
+
+#### `Counterpart`
+
+Contraparte de un ingreso o un gasto, es decir, pagador, o pagado.
+
+* **`id`**, se forma mediante `999` y `name`.
+* **`name`**, nombre de la contraparte.
+* **`@repr_name`**, igual que `name`, definido para que sea compatible con `Account`.
