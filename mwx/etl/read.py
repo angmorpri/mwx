@@ -1,10 +1,9 @@
 # 2025/08/21
 """
-etl.py - Reading and writing MyWallet data.
+read.py - Reading MyWallet data.
 
-Defines functions 'load' and 'write' for MyWallet data from or to SQLite
-databases. 'MWXNamespace' is a namedtuple defined to handle the collections of
-items: 'accounts', 'categories', 'entries', 'notes' and 'counterparts'.
+Defines function 'read', to load data from a SQLite database with MyWallet
+backup format.
 
 """
 
@@ -14,26 +13,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from mwx.etl.common import MYWALLET_TABLES, MWXNamespace
 from mwx.model import Account, Category, Counterpart, Entry
 from mwx.util import find_first
-
-MWXNamespace = namedtuple(
-    "MWXNamespace",
-    [
-        "accounts",
-        "counterparts",
-        "categories",
-        "entries",
-    ],
-)
-
-MYWALLET_TABLES = [
-    "tbl_account",
-    "tbl_cat",
-    "tbl_notes",
-    "tbl_transfer",
-    "tbl_trans",
-]
 
 TBLCAT_TO_CAT = [-1, +1]  # 0 --> -1 expense, +1 --> +1 income
 CAT_TO_TBLCAT = [None, +1, 0]  # -1 --> 0 expense, +1 --> +1 income
@@ -43,10 +25,7 @@ TBLTRANS_TO_ENTRY = [-1, +1]  # 0 --> -1 expense, +1 --> +1 income
 ENTRY_TO_TBLTRANS = [None, +1, 0]  # +1 --> +1 income, -1 --> 0 expense
 
 
-# Main functions
-
-
-def read(path: str | Path) -> None:
+def read(path: str | Path) -> MWXNamespace:
     """Reads data from a MyWallet SQLite database"""
     # Collect tables from the database
     data = {}
@@ -153,10 +132,6 @@ def read(path: str | Path) -> None:
         categories=list(sorted(categories)),
         entries=list(sorted(entries)),
     )
-
-
-def write(path: str | Path) -> None:
-    pass
 
 
 # Auxiliary functions

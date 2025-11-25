@@ -9,7 +9,7 @@ from itertools import groupby
 
 import pandas as pd
 
-from mwx.etl import MWXNamespace
+from mwx.etl.read import MWXNamespace
 
 
 def MonthlyFrame(mwxns: MWXNamespace) -> pd.DataFrame:

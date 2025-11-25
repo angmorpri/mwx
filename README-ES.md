@@ -78,3 +78,22 @@ Define, además, los siguientes métodos:
 
 * **`has_account(account)`**, devuelve `True` si la entrada tiene, como origen o destino, la cuenta `account`, que puede ser un objeto tipo `Account`, o el nombre de una cuenta.
 * **`flow(account)`**, devuelve +1, 0 o -1, en función de hacia dónde viaja el flujo de dinero de la entrada respecto a la cuenta `account`. Si `account` no es una cuenta de esta entrada, se devuelve 0; en cualquier otro caso, siempre se devolverá -1 o +1.
+
+## ETL
+
+El proceso de ETL se divide en **lectura** (`read()`) y **escritura** (`write()`).
+
+#### `read(path: str | Path) -> MWXNamespace`
+
+Lee del archivo SQLite indicado por `path`, que debe tener formato de archivo de backup de MiBilletera. Devuelve un `MWXNamespace`, un espacio de nombres que contiene cuatro listas, una por entidad: `accounts`, `counterparts`, `categories` y `entries`.
+
+#### `write(path: str | Path, data: MWXNamespace) -> None`
+
+Sobrescribe el archivo SQLite indicado por `path`, que debe tener formato de archivo de backup de MiBilletera, con los datos en `data`, que deben tener formato `MWXNamespace`.
+
+Automáticamente gestiona:
+
+* **Nuevas entidades**, todas aquéllas que tengan `mwid` igual a `-1`.
+* **Entidades a eliminar**, todas aquéllas que existan en su tabla respectiva, pero cuyo `mwid` no esté en el modelo.
+* **Entidades erróneas**, todas aquéllas cuyo `mwid` no exista ya en su tabla respectiva, serán ignoradas y se informará al usuario.
+

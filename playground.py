@@ -6,14 +6,14 @@ playground.py - Non-pytest testing
 
 from pathlib import Path
 
-from mwx import etl
+from mwx.etl import read
 
 TESTING_DB = Path(__file__).parent / "tests" / "Sep_10_2025_ExpensoDB"
 REPORTS_OUTPUT_PATH = Path(__file__).parent / "tests" / "TestReport.csv"
 
 
 if __name__ == "__main__":
-    data = etl.read(TESTING_DB)
+    data = read(TESTING_DB)
     print("ACCOUNTS")
     for account in data.accounts:
         print(account)
