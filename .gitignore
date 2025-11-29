@@ -1,5 +1,6 @@
 # Local only
 notes/
+tests/data/MWX_*
 .vscode/
 .python-version
 .pytest_cache

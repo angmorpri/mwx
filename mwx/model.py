@@ -18,6 +18,10 @@ RGB_REGEX = re.compile(r"^#([0-9a-fA-F]{6})$")
 CATEGORY_FULL_REGEX = re.compile(r"^[A-Za-z]\d{2}\. .+$")
 CATEGORY_CODE_REGEX = re.compile(r"^[A-Za-z]\d{2}$")
 
+CAT_TO_TBLCAT = [None, +1, 0]  # -1 --> 0 expense, +1 --> +1 income
+NOTES_TO_TBLNOTES = [-1, +1, 0]  # 0 --> -1 neutral, +1 --> +1 payer, -1 --> 0 payee
+ENTRY_TO_TBLTRANS = [None, +1, 0]  # +1 --> +1 income, -1 --> 0 expense
+
 
 class _MWXBaseModel(ABC):
     """Base class for MWX models.
@@ -150,8 +154,14 @@ class Account(_MWXBaseModel):
         }
 
     def to_mywallet(self) -> dict[str, Any]:
-        # TODO
-        pass
+        return {
+            "acc_name": self.name,
+            "acc_initial": 0.0,
+            "acc_order": self.order,
+            "acc_is_closed": int(not self.is_visible),
+            "acc_color": self.color,
+            "acc_min_limit": 0.0,
+        }
 
     def __str__(self) -> str:
         legacy = " [LEGACY]" if self.is_legacy else ""
@@ -166,6 +176,7 @@ class Counterpart(_MWXBaseModel):
     def __init__(self, name: str) -> None:
         super().__init__(0)
         self.name = name
+        self.is_legacy = False  # Counterparts are never legacy
 
     @property
     def repr_name(self) -> str:
@@ -182,8 +193,7 @@ class Counterpart(_MWXBaseModel):
         }
 
     def to_mywallet(self) -> dict[str, Any]:
-        # TODO
-        pass
+        return {}  # Counterparts are not stored as entities in MyWallet
 
     def __str__(self) -> str:
         return f"[{self.str_mwid}] {self.repr_name}"
@@ -304,8 +314,20 @@ class Category(_MWXBaseModel):
         }
 
     def to_mywallet(self) -> dict[str, Any]:
-        # TODO
-        pass
+        if self.type == 0:
+            # 'tbl_note' category
+            return {
+                "note_text": f"[{self.repr_name}]",
+                "note_payee_payer": -1,
+            }
+        else:
+            # 'tbl_cat' category
+            return {
+                "category_name": self.repr_name,
+                "category_color": self.color,
+                "category_is_inc": CAT_TO_TBLCAT[self.type],
+                "category_icon": self.icon_id,
+            }
 
     def __str__(self) -> str:
         legacy = " [LEGACY]" if self.is_legacy else ""
@@ -338,6 +360,7 @@ class Entry(_MWXBaseModel):
         self._item = None
         self.details = details
         self.is_bill = is_bill
+        self.is_legacy = False  # Entries are never legacy
 
         # 'type' must be immutable after creation
         if ent_type not in (-1, 0, 1):
@@ -496,8 +519,31 @@ class Entry(_MWXBaseModel):
         }
 
     def to_mywallet(self) -> dict[str, Any]:
-        # TODO
-        pass
+        if self.type == 0:
+            # 'tbl_transfer' entry
+            return {
+                "trans_from_id": self.source.mwid,
+                "trans_to_id": self.target.mwid,
+                "trans_amount": self.amount,
+                "trans_date": f"{self.date:%Y%m%d}",
+                "trans_note": (self.item + "\n" + self.details).strip(),
+            }
+        else:
+            # 'tbl_trans' entry
+            return {
+                "exp_amount": self.amount,
+                "exp_cat": self.category.mwid,
+                "exp_acc_id": self.source.mwid if self.type == -1 else self.target.mwid,
+                "exp_payee_name": (
+                    self.source.name if self.type == +1 else self.target.name
+                ),
+                "exp_date": f"{self.date:%Y%m%d}",
+                "exp_month": f"{self.date:%Y%m}",
+                "exp_is_debit": ENTRY_TO_TBLTRANS[self.type],
+                "exp_note": (self.item + "\n" + self.details).strip(),
+                "exp_is_paid": 1,
+                "exp_is_bill": int(self.is_bill),
+            }
 
     def __str__(self) -> str:
         return f"[{self.str_mwid}] {self.date:%Y-%m-%d}: {self.amount:8.2f} € <{self.category.code}> ({self.source.repr_name} -> {self.target.repr_name}), '{self.item}'"

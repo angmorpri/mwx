@@ -18,11 +18,8 @@ from mwx.model import Account, Category, Counterpart, Entry
 from mwx.util import find_first
 
 TBLCAT_TO_CAT = [-1, +1]  # 0 --> -1 expense, +1 --> +1 income
-CAT_TO_TBLCAT = [None, +1, 0]  # -1 --> 0 expense, +1 --> +1 income
 TBLNOTES_TO_NOTES = [-1, +1, 0]  # 0 --> -1 payee, +1 --> +1 payer, -1 --> 0 neutral
-NOTES_TO_TBLNOTES = [-1, +1, 0]  # 0 --> -1 neutral, +1 --> +1 payer, -1 --> 0 payee
 TBLTRANS_TO_ENTRY = [-1, +1]  # 0 --> -1 expense, +1 --> +1 income
-ENTRY_TO_TBLTRANS = [None, +1, 0]  # +1 --> +1 income, -1 --> 0 expense
 
 
 def read(path: str | Path) -> MWXNamespace:
@@ -44,7 +41,7 @@ def read(path: str | Path) -> MWXNamespace:
             name=row.acc_name,
             order=row.acc_order,
             color=row.acc_color,
-            is_visible=bool(row.acc_is_closed),
+            is_visible=not bool(row.acc_is_closed),
         )
         accounts.append(account)
 
