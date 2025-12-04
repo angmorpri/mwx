@@ -87,7 +87,7 @@ El proceso de ETL se divide en **lectura** (`read()`) y **escritura** (`write()`
 
 Lee del archivo SQLite indicado por `path`, que debe tener formato de archivo de backup de MiBilletera. Devuelve un `MWXNamespace`, un espacio de nombres que contiene cuatro listas, una por entidad: `accounts`, `counterparts`, `categories` y `entries`.
 
-#### `write(path: str | Path, data: MWXNamespace) -> None`
+#### `write(path: str | Path, data: MWXNamespace, *, target_db_name: str, overwrite: bool, safe_delete: bool, verbose: int) -> None`
 
 Sobrescribe el archivo SQLite indicado por `path`, que debe tener formato de archivo de backup de MiBilletera, con los datos en `data`, que deben tener formato `MWXNamespace`.
 

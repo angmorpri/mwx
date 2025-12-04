@@ -2,3 +2,4 @@
 """QoL tool for MyWallet Android app"""
 
 from .etl import read, write
+from .wallet import Wallet
