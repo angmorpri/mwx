@@ -17,11 +17,27 @@ from mwx.etl.common import MWXNamespace
 from mwx.util import find
 
 
-def write(path: str | Path, data: MWXNamespace) -> Path:
+def write(
+    base_db_path: str | Path,
+    data: MWXNamespace,
+    *,
+    new_db_name: str = "MWX_{now}_{stem}.sqlite",
+    unsafe: bool = False,
+) -> Path:
     """Writes data to a MyWallet SQLite database
 
-    `path` must point to a writable MyWallet backup database file, which will
-    serve as a template for the new database.
+    `base_db_path` must point to a writable MyWallet backup database file,
+    which will serve as a template for the new database. The new database will
+    be stored at the same path, with name `new_db_name`, which can include the
+    following placeholders:
+    - `{now}`: Current date and time in 'YYYYMMDDHHMMSS' format.
+    - `{name}` or `{}`: Original database file name with extension.
+    - `{stem}`: Original database file name without extension.
+    - `{ext}`: Original database file extension.
+
+    If `unsafe` is True, it will override existing files at `new_db_name`
+    without warning. Otherwise, it will raise an error if the target file
+    exists.
 
     All entities in `data` will be written to the database, replacing any
     existing data. The behavior will be the following:
@@ -35,14 +51,7 @@ def write(path: str | Path, data: MWXNamespace) -> Path:
     Returns the path to the new database file.
 
     """
-    # Create a copy of the template database to write to
-    orig_path = Path(path)
-    # target_path = orig_path.parent / f"MWX_{orig_path.name}"
-    target_path = (
-        orig_path.parent
-        / f"MWX_{datetime.now().strftime('%Y%m%d%H%M%S')}_{orig_path.name}"
-    )
-    shutil.copy(orig_path, target_path)
+    target_path = process_path(base_db_path, new_db_name, unsafe)
 
     # Write data to the database
     pipeline = []
@@ -173,4 +182,36 @@ def write(path: str | Path, data: MWXNamespace) -> Path:
                 )
                 conn.commit()
 
+    return target_path
+
+
+def process_path(
+    base_db_path: str | Path,
+    new_db_name: str,
+    unsafe: bool = False,
+) -> Path:
+    """Process the new database path with placeholders."""
+    orig_path = Path(base_db_path)
+
+    # Name
+    new_db_name = new_db_name.replace("{}", "{name}")
+    new_db_name = new_db_name.format(
+        now=datetime.now().strftime("%Y%m%d%H%M%S"),
+        name=orig_path.name,
+        stem=orig_path.stem,
+        ext=orig_path.suffix,
+    )
+
+    # Path
+    target_path = orig_path.parent / new_db_name
+
+    # Check existence
+    if target_path.exists() and not unsafe:
+        raise FileExistsError(
+            f"Target database '{target_path}' already exists. "
+            "Use 'unsafe=True' to overwrite."
+        )
+
+    # Copy and return target path
+    shutil.copy(orig_path, target_path)
     return target_path

@@ -526,7 +526,13 @@ class Entry(_MWXBaseModel):
                 "trans_to_id": self.target.mwid,
                 "trans_amount": self.amount,
                 "trans_date": f"{self.date:%Y%m%d}",
-                "trans_note": (self.item + "\n" + self.details).strip(),
+                "trans_note": "\n".join(
+                    [
+                        f"[{self.category.repr_name}]",
+                        self.item,
+                        self.details,
+                    ]
+                ).strip(),
             }
         else:
             # 'tbl_trans' entry
