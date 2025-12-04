@@ -43,7 +43,10 @@ class _MWXBaseModel(ABC):
         self.mwid = mwid
         if self.mwid < -1:
             raise ValueError("MWID must be -1 (new entity) or non-negative integer.")
-        self.str_mwid = f"{self.mwid:05d}" if self.mwid != -1 else "-----"
+
+    @property
+    def str_mwid(self) -> str:
+        return f"{self.mwid:05d}" if self.mwid != -1 else "-----"
 
     @property
     @abstractmethod

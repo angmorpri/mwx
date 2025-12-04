@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from mwx.etl.common import MWXNamespace
-from mwx.util import find
+from mwx.util import find, find_first
 
 
 def write(
@@ -22,7 +22,9 @@ def write(
     data: MWXNamespace,
     *,
     new_db_name: str = "MWX_{now}_{stem}.sqlite",
-    unsafe: bool = False,
+    overwrite: bool = False,
+    safe_delete: bool = False,
+    verbose: int = 2,
 ) -> Path:
     """Writes data to a MyWallet SQLite database
 
@@ -35,7 +37,7 @@ def write(
     - `{stem}`: Original database file name without extension.
     - `{ext}`: Original database file extension.
 
-    If `unsafe` is True, it will override existing files at `new_db_name`
+    If `overwrite` is True, it will override existing files at `new_db_name`
     without warning. Otherwise, it will raise an error if the target file
     exists.
 
@@ -48,10 +50,23 @@ def write(
     - If an entity's 'mwid' is -1, it will be treated as a new entity and
     assigned a new 'mwid'.
 
+    If `safe_delete` is True, it will question the user before deleting any
+    entitites.
+
+    `verbose` controls the verbosity level of the output:
+    - 0: No output.
+    - 1: Only warnings.
+    - 2: Warnings and info messages.
+    Note that `safe_delete` prompts will always be shown regardless of
+    verbosity level.
+
     Returns the path to the new database file.
 
     """
-    target_path = process_path(base_db_path, new_db_name, unsafe)
+    target_path = process_path(base_db_path, new_db_name, overwrite)
+
+    if verbose >= 2:
+        print(f"Starting write process (from {base_db_path} to {target_path})...")
 
     # Write data to the database
     pipeline = []
@@ -139,13 +154,15 @@ def write(
                     )
                     entity.mwid = cursor.lastrowid
                     conn.commit()
+                    if verbose >= 2:
+                        print(f"> New entity added to table '{table}':", entity)
 
                 # Existing entity (to bulk update later)
                 else:
                     if entity.mwid in existing_mwids:
                         to_update.append((entity.mwid, table_values))
                         existing_mwids.remove(entity.mwid)
-                    else:
+                    elif verbose >= 1:
                         warnings.warn(
                             f"Entity with ID {entity.mwid} not found in table "
                             f"'{table}'. It will be skipped.",
@@ -169,9 +186,22 @@ def write(
                     [(*vals, mwid) for mwid, vals in to_update],
                 )
                 conn.commit()
+                if verbose >= 2:
+                    print(f"> Updated {len(to_update)} entities in table '{table}'.")
 
             # Bulk delete
             if to_delete:
+                # Safe delete prompt
+                if safe_delete:
+                    print(
+                        f"The following entities will be deleted from table '{table}':"
+                    )
+                    for mwid in to_delete:
+                        print(f" - {find_first(entities, mwid=mwid)}")
+                    ans = input("Proceed with deletion? (Y/n): ")
+                    if ans != "Y":
+                        print("Deletion aborted by user.")
+                # Delete
                 delete_placeholders = ", ".join(["?"] * len(to_delete))
                 cursor.execute(
                     f"""
@@ -181,6 +211,8 @@ def write(
                     to_delete,
                 )
                 conn.commit()
+                if verbose >= 2:
+                    print(f"> Deleted {len(to_delete)} entities from table '{table}'.")
 
     return target_path
 
@@ -188,7 +220,7 @@ def write(
 def process_path(
     base_db_path: str | Path,
     new_db_name: str,
-    unsafe: bool = False,
+    overwrite: bool = False,
 ) -> Path:
     """Process the new database path with placeholders."""
     orig_path = Path(base_db_path)
@@ -206,10 +238,10 @@ def process_path(
     target_path = orig_path.parent / new_db_name
 
     # Check existence
-    if target_path.exists() and not unsafe:
+    if target_path.exists() and not overwrite:
         raise FileExistsError(
             f"Target database '{target_path}' already exists. "
-            "Use 'unsafe=True' to overwrite."
+            "Use 'overwrite=True' to overwrite."
         )
 
     # Copy and return target path

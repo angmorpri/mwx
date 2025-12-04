@@ -7,8 +7,8 @@ playground.py - Non-pytest testing
 from pathlib import Path
 
 from mwx.etl import read, write
-from mwx.util import find_first
 from mwx.model import Account, Category, Counterpart, Entry
+from mwx.util import find_first
 
 TESTING_DB_PATH = Path(__file__).parent / "tests" / "data" / "Sep_10_2025_ExpensoDB"
 
@@ -42,4 +42,6 @@ if __name__ == "__main__":
     entry.category = new_cat
 
     # Write to a new database
-    new_db_path = write(TESTING_DB_PATH, data)
+    new_db_path = write(
+        TESTING_DB_PATH, data, new_db_name="PLAYGROUND_{}.sqlite", overwrite=True
+    )
