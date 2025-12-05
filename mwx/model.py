@@ -23,7 +23,7 @@ NOTES_TO_TBLNOTES = [-1, +1, 0]  # 0 --> -1 neutral, +1 --> +1 payer, -1 --> 0 p
 ENTRY_TO_TBLTRANS = [None, +1, 0]  # +1 --> +1 income, -1 --> 0 expense
 
 
-class _MWXBaseModel(ABC):
+class WalletEntity(ABC):
     """Base class for MWX models.
 
     Defines:
@@ -54,13 +54,13 @@ class _MWXBaseModel(ABC):
         """Abstract property for sorting key."""
         pass
 
-    def __eq__(self, other: _MWXBaseModel) -> bool:
-        if not isinstance(other, _MWXBaseModel):
+    def __eq__(self, other: WalletEntity) -> bool:
+        if not isinstance(other, WalletEntity):
             return NotImplemented
         return self.sorting_key == other.sorting_key
 
-    def __lt__(self, other: _MWXBaseModel) -> bool:
-        if not isinstance(other, _MWXBaseModel):
+    def __lt__(self, other: WalletEntity) -> bool:
+        if not isinstance(other, WalletEntity):
             return NotImplemented
         return self.sorting_key < other.sorting_key
 
@@ -71,7 +71,7 @@ class _MWXBaseModel(ABC):
 # Entities
 
 
-class Account(_MWXBaseModel):
+class Account(WalletEntity):
     """Account entity."""
 
     _GLOBAL_ORDER = 100
@@ -173,7 +173,7 @@ class Account(_MWXBaseModel):
         )
 
 
-class Counterpart(_MWXBaseModel):
+class Counterpart(WalletEntity):
     """Counterpart entity, either payer or payee."""
 
     def __init__(self, name: str) -> None:
@@ -202,7 +202,7 @@ class Counterpart(_MWXBaseModel):
         return f"[{self.str_mwid}] {self.repr_name}"
 
 
-class Category(_MWXBaseModel):
+class Category(WalletEntity):
     """Category entity."""
 
     def __init__(
@@ -337,7 +337,7 @@ class Category(_MWXBaseModel):
         return f"[{self.str_mwid}] {self.repr_name} ({self.type}, {self.icon_id}, {self.color}){legacy}"
 
 
-class Entry(_MWXBaseModel):
+class Entry(WalletEntity):
     """Entry entity, either income, expense or transfer between accounts."""
 
     def __init__(
