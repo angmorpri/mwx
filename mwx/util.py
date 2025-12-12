@@ -3,8 +3,10 @@
 util.py - Utility functions for the application.
 """
 
+import calendar
 from datetime import datetime
 from itertools import product
+from types import EllipsisType
 from typing import Any, Callable, Iterable, TypeVar
 
 import pandas as pd
@@ -175,104 +177,113 @@ def dict_product(d: dict[str, list[Any]]) -> list[dict[str, Any]]:
     return [dict(zip(keys, values)) for values in values_product]
 
 
-DateLikeObject = int | str | datetime | None
+DateLikeObject = str | datetime | EllipsisType | None
+_DATERANGE_INIT_KEYS = ("start", "end", "year", "month", "day")
 
 
-def parse_date_range(
-    raw: DateLikeObject | tuple[DateLikeObject, DateLikeObject],
-) -> tuple[datetime, datetime]:
-    """Parses a date range from various input formats.
+class daterange:
+    """Range between two datetimes.
 
-    Returns a tuple of datetime objects in range [min_date, max_date).
+    Provides methods to handle date ranges conveniently, from an inclusive
+    start to an exclusive end.
 
-    If a tuple is provided, it is treated as (min_date, max_date). Allowed
-    values are:
-    - int: Converts to string.
-    - str: Interpreted as 'YYYY', 'YYYYMM', 'YYYYMMDD', 'YYYY-MM' or 'YYYY-MM-DD'.
-      When no day or month is provided, if min_date, it defaults to the
-      earliest possible date; if max_date, it defaults to the latest possible
-      date.
-    - datetime: Returned as is
-    - None: Returns either datetime.min or datetime.max.
+    Main methods are:
+    - interval(): returns a tuple (start, end) of datetime objects.
+    - walk(step): yields datetime objects from start to end, stepping by
+      the given delta `step`.
 
-    If a single value is provided, allowed values are:
-    - int: Converts to string.
-    - str: Interpreted as 'YYYY', 'YYYYMM', 'YYYYMMDD', 'YYYY-MM' or 'YYYY-MM-DD'.
-      Range is set to the full period represented by the date.
-    - datetime: Returned as (date, date + 1 day).
-    - None: Returns (datetime.min, datetime.max).
+    Constructor can be one of:
+    - daterange(start, end)
+    - daterange(year, month, day)
 
-    Raises ValueError for unsupported formats or invalid dates.
+    If providing a start and end, both must be date-like objects, that is:
+    - A datetime.datetime object.
+    - A string in 'YYYY-MM-DD' or 'YYYYMMDD' format, where month and day are
+    optional.
+    - An Ellipsis (...) or None, representing datetime.min or datetime.max.
+
+    If providing year, month, day, they can be:
+    - An integer.
+    - An Ellipsis (...) or None, representing the whole range for that unit.
 
     """
-    if isinstance(raw, tuple):
-        raw_min, raw_max = raw
 
-        # Min date
-        if raw_min is None:
-            min_date = datetime.min
-        elif isinstance(raw_min, datetime):
-            min_date = raw_min
-        elif isinstance(raw_min, int):
-            raw_min = str(raw_min)
-        if isinstance(raw_min, str):
-            raw_min = raw_min.replace("-", "")
-            if len(raw_min) == 4:
-                min_date = datetime(int(raw_min), 1, 1)
-            elif len(raw_min) == 6:
-                min_date = datetime(int(raw_min[:4]), int(raw_min[4:6]), 1)
-            elif len(raw_min) == 8:
-                min_date = datetime(
-                    int(raw_min[:4]), int(raw_min[4:6]), int(raw_min[6:8])
+    YEAR_MIN = 1900
+    YEAR_MAX = 2100
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        # Infer constructor type
+        for i, arg in enumerate(args):
+            if isinstance(arg, (datetime, str)):
+                key = "start" if i == 0 else "end"
+                kwargs[key] = arg
+            elif isinstance(arg, int):
+                key = ["year", "month", "day"][i]
+                kwargs[key] = arg
+
+        if not any(key in kwargs for key in _DATERANGE_INIT_KEYS):
+            if len(args) == 1:
+                kwargs["start"] = args[0]
+                kwargs["end"] = args[0] + relativedelta(days=+1)
+            elif len(args) == 2:
+                kwargs["start"] = args[0]
+                kwargs["end"] = args[1]
+            elif len(args) == 3:
+                kwargs["year"] = args[0]
+                kwargs["month"] = args[1]
+                kwargs["day"] = args[2]
+            else:
+                raise ValueError("Invalid arguments for daterange constructor.")
+
+        if "start" in kwargs:
+            self.dstart = self.parse_date(kwargs["start"], pos=0)
+            self.dend = self.parse_date(
+                kwargs.get("end", self.dstart + relativedelta(days=+1)), pos=1
+            )
+
+        elif "year" in kwargs:
+            year = kwargs.get("year", ...)
+            month = kwargs.get("month", ...)
+            day = kwargs.get("day", ...)
+
+            check = lambda x, y: y if x is Ellipsis or x is None else x  # noqa
+
+            y0 = check(year, daterange.YEAR_MIN)
+            m0 = check(month, 1)
+            d0 = check(day, 1)
+
+            y1 = check(year, daterange.YEAR_MAX)
+            m1 = check(month, 12)
+            d1 = check(day, calendar.monthrange(y1, m1)[1])
+
+            self.dstart = datetime(y0, m0, d0)
+            self.dend = datetime(y1, m1, d1) + relativedelta(days=+1)
+
+    def parse_date(self, raw: DateLikeObject, pos: int = 0) -> datetime:
+        if isinstance(raw, datetime):
+            return raw
+        elif isinstance(raw, str):
+            raw = raw.strip().replace("-", "")
+            if len(raw) == 8:
+                return datetime.strptime(raw, "%Y%m%d")
+            elif len(raw) == 6:
+                dt = datetime.strptime(raw, "%Y%m")
+                return dt.replace(
+                    day=1 if pos == 0 else calendar.monthrange(dt.year, dt.month)[1]
+                )
+            elif len(raw) == 4:
+                dt = datetime.strptime(raw, "%Y")
+                return dt.replace(
+                    month=1 if pos == 0 else 12,
+                    day=1 if pos == 0 else 31,
                 )
             else:
-                raise ValueError(f"Invalid date format: '{raw_min}'")
+                raise ValueError(f"Invalid date string format: {raw}")
+        elif raw is Ellipsis or raw is None:
+            return datetime.min if pos == 0 else datetime.max
+        else:
+            raise TypeError(f"Invalid date-like object: {raw}")
 
-        # Max date
-        if raw_max is None:
-            max_date = datetime.max
-        elif isinstance(raw_max, datetime):
-            max_date = raw_max
-        elif isinstance(raw_max, int):
-            raw_max = str(raw_max)
-        if isinstance(raw_max, str):
-            raw_max = raw_max.replace("-", "")
-            if len(raw_max) == 4:
-                max_date = datetime(int(raw_max), 1, 1)
-            elif len(raw_max) == 6:
-                max_date = datetime(int(raw_max[:4]), int(raw_max[4:6]), 1)
-            elif len(raw_max) == 8:
-                max_date = datetime.strptime(raw_max, "%Y%m%d")
-            else:
-                raise ValueError(f"Invalid date format: '{raw_max}'")
-
-    else:
-        raw_date = raw
-
-        if raw_date is None:
-            return (datetime.min, datetime.max)
-        elif isinstance(raw_date, datetime):
-            return (raw_date, raw_date + relativedelta(days=+1))
-        elif isinstance(raw_date, int):
-            raw_date = str(raw_date)
-        if isinstance(raw_date, str):
-            raw_date = raw_date.replace("-", "")
-            if len(raw_date) == 4:
-                year = int(raw_date)
-                min_date = datetime(year, 1, 1)
-                max_date = datetime(year + 1, 1, 1)
-            elif len(raw_date) == 6:
-                year = int(raw_date[:4])
-                month = int(raw_date[4:6])
-                min_date = datetime(year, month, 1)
-                if month == 12:
-                    max_date = datetime(year + 1, 1, 1)
-                else:
-                    max_date = datetime(year, month + 1, 1)
-            elif len(raw_date) == 8:
-                min_date = datetime.strptime(raw_date, "%Y%m%d")
-                max_date = min_date + relativedelta(days=+1)
-            else:
-                raise ValueError(f"Invalid date format: '{raw_date}'")
-
-    return (min_date, max_date)
+    def interval(self) -> tuple[datetime, datetime]:
+        """Returns the (start, end) datetime interval."""
+        return (self.dstart, self.dend)

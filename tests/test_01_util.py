@@ -9,10 +9,6 @@ import pytest
 
 from mwx.util import find, find_first
 
-# ** Tests for 'find' function **
-
-# Sample data class for testing
-
 
 class Person:
     def __init__(self, name: str, birthday: datetime, city: str):
