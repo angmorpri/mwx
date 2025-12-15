@@ -51,7 +51,11 @@ def test_write_accounts(mwx_data: MWXNamespace) -> None:
     # Write to a new database
     with pytest.warns(UserWarning):
         new_db_path = write(
-            TESTING_DB_PATH, data, new_db_name="ACCS_{}.sqlite", unsafe=True
+            TESTING_DB_PATH,
+            data,
+            new_db_name="ACCS_{}.sqlite",
+            safe_delete=False,
+            overwrite=True,
         )
 
     # Read back the data
@@ -91,7 +95,11 @@ def test_write_categories(mwx_data: MWXNamespace) -> None:
     # Write to a new database
     with pytest.warns(UserWarning):
         new_db_path = write(
-            TESTING_DB_PATH, data, new_db_name="CATS_{}.sqlite", unsafe=True
+            TESTING_DB_PATH,
+            data,
+            new_db_name="CATS_{}.sqlite",
+            safe_delete=False,
+            overwrite=True,
         )
 
     # Read back the data
@@ -122,7 +130,11 @@ def test_write_trans_categories(mwx_data: MWXNamespace) -> None:
 
     # Write to a new database
     new_db_path = write(
-        TESTING_DB_PATH, data, new_db_name="TCAT_{}.sqlite", unsafe=True
+        TESTING_DB_PATH,
+        data,
+        new_db_name="TCAT_{}.sqlite",
+        safe_delete=False,
+        overwrite=True,
     )
 
     # Read back the data
@@ -189,7 +201,11 @@ def test_write_incomes_expenses(mwx_data: MWXNamespace) -> None:
     # Write to a new database
     with pytest.warns(UserWarning):
         new_db_path = write(
-            TESTING_DB_PATH, data, new_db_name="INEX_{}.sqlite", unsafe=True
+            TESTING_DB_PATH,
+            data,
+            new_db_name="INEX_{}.sqlite",
+            safe_delete=False,
+            overwrite=True,
         )
 
     # Read back the data
@@ -263,7 +279,11 @@ def test_write_transfers(mwx_data: MWXNamespace) -> None:
 
     # Write to a new database
     new_db_path = write(
-        TESTING_DB_PATH, data, new_db_name="TRNS_{}.sqlite", unsafe=True
+        TESTING_DB_PATH,
+        data,
+        new_db_name="TRNS_{}.sqlite",
+        safe_delete=False,
+        overwrite=True,
     )
 
     # Read back the data

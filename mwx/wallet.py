@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from mwx import etl
 from mwx.model import Account, WalletEntity
-from mwx.util import dict_product, find, parse_date_range
+from mwx.util import dict_product, find
 
 
 class Wallet:
