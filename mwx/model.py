@@ -474,7 +474,7 @@ class Entry(WalletEntity):
                 "'account' argument must be an Account instance or an account name."
             )
 
-    def flow(self, account: Account | str) -> int:
+    def flow(self, account: Account | str | int) -> int:
         """Returns the flow of money from the point of view of the
         given account.
 
@@ -495,6 +495,14 @@ class Entry(WalletEntity):
             if self.source == acc:
                 return -1
             elif self.target == acc:
+                return +1
+            else:
+                return 0
+        elif isinstance(account, int):
+            acc_mwid = account
+            if self.source.mwid == acc_mwid:
+                return -1
+            elif self.target.mwid == acc_mwid:
                 return +1
             else:
                 return 0

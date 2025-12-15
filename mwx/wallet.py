@@ -7,12 +7,17 @@ Defines Wallet.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
+from types import EllipsisType
 from typing import Any, Callable
 
 from mwx import etl
 from mwx.model import Account, WalletEntity
-from mwx.util import dict_product, find
+from mwx.util import daterange, dict_product, find
+
+DateLikeObject = str | datetime | EllipsisType | None
+DaterangeLikeObject = daterange | tuple[DateLikeObject, DateLikeObject]
 
 
 class Wallet:
@@ -126,7 +131,7 @@ class Wallet:
 
     # Convenience methods
 
-    def get(
+    def find(
         self, *funcs: Callable[[WalletEntity], bool], **params: Any
     ) -> list[WalletEntity]:
         """Retrieves entities matching given criteria.
@@ -146,10 +151,12 @@ class Wallet:
         searched.
 
         Dates can be specified using 'date' parameter, which can be:
-        - An integer, will be converted to a string.
-        - A string, with either "YYYY", "YYYYMM", "YYYYMMDD", "YYYY-MM" or
-          "YYYY-MM-DD" formats.
-        - A datetime.date or datetime.datetime object.
+        - A datetime.datetime.
+        - A string with format 'YYYY-MM-DD' or 'YYYYMMDD', where month and day
+        are optional, in which case they will define a range.
+        - A mwx.util.daterange object, or a tuple of two dates defining a range
+        [min, max).
+
         You can also directly provide 'year', 'month' and 'day' parameters.
 
         Both 'date' and 'amount' can also receive a tuple of two values, which
@@ -161,6 +168,13 @@ class Wallet:
 
         'account' and 'counterpart' parameters search both in 'source' and
         'target' fields of entries.
+
+        'flow' can be used to filter entries by their flow with respect to a
+        given account. If no account is provided, 'flow' will be ignored.
+
+        'item' and 'details' parameters match any lowercase substring in the
+        respective fields. If the value starts with '!', it will match the
+        exact value instead.
 
         If any of the **parms is a list, this function will be called per each
         value, and the results will be concatenated. If multiple parameters are
@@ -219,42 +233,73 @@ class Wallet:
         # Date and date range
         date = params.pop("date", None)
         if date:
-            min_date, max_date = parse_date_range(date)
-            funcs.append(
-                lambda x, mind=min_date, maxd=max_date: (mind <= x.date < maxd)
-            )
+            if isinstance(date, (datetime, str)):
+                drange = daterange(date)
+            elif isinstance(date, tuple):
+                drange = daterange(date[0], date[1])
+            elif isinstance(date, daterange):
+                drange = date
+            funcs.append(lambda x, dr=drange: (dr.start() <= x.date < dr.end()))
 
         # Year, month, day
-        for date_part in ("year", "month", "day"):
-            if date_part in params:
-                value = params.pop(date_part)
-                funcs.append(
-                    lambda x, date_part=date_part, value=value: getattr(
-                        x.date, date_part
-                    )
-                    == value
-                )
+        if any(k in params for k in ("year", "month", "day")):
+            parts = {
+                "year": params.pop("year", ...),
+                "month": params.pop("month", ...),
+                "day": params.pop("day", ...),
+            }
+            drange = daterange(**parts)
+            funcs.append(lambda x, dr=drange: (dr.start() <= x.date < dr.end()))
 
-        # Source, target, category resolution
-        for param in ("source", "target", "category"):
+        # Source, target resolution
+        for param in ("source", "target"):
             if param in params:
-                value = params.pop(param)
-                if isinstance(value, WalletEntity):
-                    funcs.append(lambda x, p=param, v=value: getattr(x, p) == v)
-                elif isinstance(value, int):
-                    funcs.append(lambda x, p=param, v=value: getattr(x, p).mwid == v)
-                elif isinstance(param, str) and param in ("source", "target"):
-                    funcs.append(
-                        lambda x, p=param, v=value: (getattr(x, p).repr_name == v)
+                acc = params.pop(param)
+                if isinstance(acc, WalletEntity):
+                    funcs.append(lambda x, p=param, v=acc: getattr(x, p) == v)
+                elif isinstance(acc, int):
+                    funcs.append(lambda x, p=param, v=acc: getattr(x, p).mwid == v)
+                elif isinstance(acc, str):
+                    funcs.append(lambda x, p=param, v=acc: getattr(x, p).repr_name == v)
+
+                if "flow" in params:
+                    flow = params.pop("flow")
+                    funcs.append(lambda x, acc=acc, f=flow: x.flow(acc) == f)
+
+        # Account resolution
+        account = params.pop("account", None)
+        if account is not None:
+            if isinstance(account, WalletEntity):
+                funcs.append(lambda x, v=account: (x.source == v or x.target == v))
+            elif isinstance(account, int):
+                funcs.append(
+                    lambda x, v=account: (x.source.mwid == v or x.target.mwid == v)
+                )
+            elif isinstance(account, str):
+                funcs.append(
+                    lambda x, v=account: (
+                        x.source.repr_name == v or x.target.repr_name == v
                     )
-                elif isinstance(param, str) and param == "category":  # category
-                    funcs.append(
-                        lambda x, p=param, v=value: (
-                            getattr(x, p).repr_name == v
-                            or getattr(x, p).code == v
-                            or getattr(x, p).name == v
-                        )
+                )
+            if "flow" in params:
+                flow = params.pop("flow")
+                funcs.append(lambda x, acc=account, f=flow: x.flow(acc) == f)
+
+        # Category resolution
+        if "category" in params:
+            acc = params.pop("category")
+            if isinstance(acc, WalletEntity):
+                funcs.append(lambda x, v=acc: x.category == v)
+            elif isinstance(acc, int):
+                funcs.append(lambda x, v=acc: x.category.mwid == v)
+            elif isinstance(acc, str):
+                funcs.append(
+                    lambda x, v=acc: (
+                        x.category.repr_name == v
+                        or x.category.code == v
+                        or x.category.name == v
                     )
+                )
 
         # Account resolution
         account = params.pop("account", None)
@@ -284,10 +329,20 @@ class Wallet:
                     )
                 )
 
-        # Details param matches any substring in details
+        # Item and Details param matches any lowercase substring
+        item = params.pop("item", None)
+        if item is not None:
+            if item.startswith("!"):
+                funcs.append(lambda x, v=item[1:]: v == x.item)
+            else:
+                funcs.append(lambda x, v=item: (v.lower() in x.item.lower()))
+
         details = params.pop("details", None)
         if details is not None:
-            funcs.append(lambda x, v=details: (v in x.details))
+            if details.startswith("!"):
+                funcs.append(lambda x, v=details[1:]: v == x.details)
+            else:
+                funcs.append(lambda x, v=details: (v.lower() in x.details.lower()))
 
         # Final filtering
         return find(entities, *funcs, **params)
@@ -295,29 +350,55 @@ class Wallet:
     def sum(
         self,
         account: str | Account,
+        date: DaterangeLikeObject | DateLikeObject,
         *funcs: Callable[[WalletEntity], bool],
         **params: Any,
     ) -> float:
-        """Sums amounts of entries for an account matching given criteria.
+        """Sums amounts of entries from the POV of an 'account' in a period
+        of time defined by 'date'.
 
-        Criteria are the same as in `get()` method.
+        'date' must be a mwx.util.daterange object, or a tuple of date-like
+        objects defining a range [min, max). If a single date-like object is
+        provided, it will be treated as (date, None).
 
-        If 'date' is provided and it's not a tuple, it will be treated as a
-        maximum date (exclusive).
-
-        Returns the sum of amounts of matching entries.
+        Optional filters can be provided just like in 'find()' method.
 
         """
         # Fix account param
+        if not isinstance(account, (str, Account)):
+            raise ValueError("'account' parameter must be either str or Account.")
         params["account"] = account
 
         # Fix date
-        date = params.get("date", None)
-        if date is not None and not isinstance(date, tuple):
-            params["date"] = (None, date)
+        if not isinstance(date, (daterange, tuple)):
+            date = (date, None)
+        params["date"] = date
 
         # Get entries
-        entries = self.get(*funcs, **params)
-        return round(
-            sum(entry.amount * entry.flow(params["account"]) for entry in entries), 2
+        entries = self.find(*funcs, **params)
+        total = sum(entry.amount * entry.flow(params["account"]) for entry in entries)
+        return round(total, 2)
+
+    def budget(
+        self,
+        account: str | Account,
+        date: DateLikeObject,
+        *funcs: Callable[[WalletEntity], bool],
+        **params: Any,
+    ) -> float:
+        """Sums amounts of entries from the POV of an 'account' since available
+        to the given 'date' (exclusive).
+
+        'date' must be a date-like object.
+
+        Optional filters can be provided just like in 'find()' method.
+
+        Roughly equivalent to sum(account, daterange(None, date), ...).
+
+        """
+        return self.sum(
+            account,
+            daterange(..., date),
+            *funcs,
+            **params,
         )
