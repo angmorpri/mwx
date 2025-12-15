@@ -17,6 +17,19 @@ DateLikeObject = str | datetime | EllipsisType | None
 _DATERANGE_INIT_KEYS = ("start", "end", "year", "month", "day")
 
 
+# Auxiliar functions
+def _check(x: Any, y: Any) -> Any:
+    return y if x is Ellipsis else x
+
+
+def _getitem(lst: list[Any], index: int) -> Any | None:
+    try:
+        return lst[index]
+    except IndexError:
+        return None
+
+
+# Auxiliar class
 class PartialDate:
     """Represents a partial date with unknown units."""
 
@@ -27,6 +40,22 @@ class PartialDate:
         self.month = month
         self.day = day
         self._postops = []
+
+    @staticmethod
+    def is_full_date(raw: DateLikeObject) -> bool:
+        if isinstance(raw, datetime):
+            return True
+        elif isinstance(raw, str):
+            raw = raw.strip().replace("-", "")
+            return len(raw) == 8
+        return False
+
+    @staticmethod
+    def is_partial_date(raw: DateLikeObject) -> bool:
+        if isinstance(raw, str):
+            raw = raw.strip().replace("-", "")
+            return len(raw) in (4, 6)
+        return False
 
     @classmethod
     def parse(self, raw: DateLikeObject) -> PartialDate:
@@ -50,14 +79,21 @@ class PartialDate:
         else:
             raise TypeError(f"Invalid date-like object: {raw}")
 
-    def start(self) -> datetime:
+    def date(self) -> datetime:
+        """Returns a datetime object if all units are known."""
+        if self.year is not None and self.month is not None and self.day is not None:
+            return datetime(self.year, self.month, self.day)
+        else:
+            raise ValueError("Cannot convert to datetime: some units are unknown.")
+
+    def first(self) -> datetime:
         """Resolves unknown units to a starting datetime."""
         y = self.year if self.year is not None else daterange.YEAR_MIN
         m = self.month if self.month is not None else 1
         d = self.day if self.day is not None else 1
         return self._handle_postops(datetime(y, m, d))
 
-    def end(self) -> datetime:
+    def last(self) -> datetime:
         """Resolves unknown units to an ending datetime."""
         y = self.year if self.year is not None else daterange.YEAR_MAX
         m = self.month if self.month is not None else 12
@@ -79,6 +115,7 @@ class PartialDate:
             self._postops.append(relativedelta(years=+n))
         else:
             self._postops.append(relativedelta(days=+n))
+        return self
 
     def sub(self, n: int) -> PartialDate:
         """Returns a new PartialDate with 'n' units subtracted.
@@ -95,6 +132,7 @@ class PartialDate:
             self._postops.append(relativedelta(years=-n))
         else:
             self._postops.append(relativedelta(days=+n))
+        return self
 
     def _handle_postops(self, dt: datetime) -> datetime:
         for op in self._postops:
@@ -102,6 +140,7 @@ class PartialDate:
         return dt
 
 
+# Date Range
 class daterange:
     """Range between two datetimes.
 
@@ -155,11 +194,11 @@ class daterange:
 
         if not any(key in kwargs for key in _DATERANGE_INIT_KEYS):
             if len(args) == 1:
-                kwargs["start"] = PartialDate.parse(args[0])
+                kwargs["start"] = args[0]
                 kwargs["end"] = None
             elif len(args) == 2:
-                kwargs["start"] = PartialDate.parse(args[0])
-                kwargs["end"] = PartialDate.parse(args[1])
+                kwargs["start"] = args[0]
+                kwargs["end"] = args[1]
             elif len(args) == 3:
                 kwargs["year"] = args[0]
                 kwargs["month"] = args[1]
@@ -167,21 +206,8 @@ class daterange:
             else:
                 raise ValueError("Invalid arguments for daterange constructor.")
 
-        if "start" in kwargs:
-            start = kwargs.get("start", None)
-            end = kwargs.get("end", None)
-            if start in [None, Ellipsis] and end in [None, Ellipsis]:
-                raise ValueError("At least one of 'start' or 'end' must be provided.")
-            elif start is None:
-                end = PartialDate.parse(end)
-                self.dend = end.end()
-                self.dstart = end.sub(1).end()
-            elif end is None:
-                start = PartialDate.parse(start)
-                self.dstart = start.start()
-                self.dend = start.add(1).start()
-
-        elif any(key in kwargs for key in ("year", "month", "day")):
+        # (year, month, day) constructor
+        if any(key in kwargs for key in ("year", "month", "day")):
             year = kwargs.get("year", ...)
             month = kwargs.get("month", ...)
             day = kwargs.get("day", ...)
@@ -191,18 +217,51 @@ class daterange:
                     "'None' is not allowed for 'year', 'month' or 'day' arguments."
                 )
 
-            check = lambda x, y: y if x is Ellipsis else x  # noqa
-
-            y0 = check(year, daterange.YEAR_MIN)
-            m0 = check(month, 1)
-            d0 = check(day, 1)
-
-            y1 = check(year, daterange.YEAR_MAX)
-            m1 = check(month, 12)
-            d1 = check(day, calendar.monthrange(y1, m1)[1])
-
+            y0 = _check(year, daterange.YEAR_MIN)
+            m0 = _check(month, 1)
+            d0 = _check(day, 1)
+            y1 = _check(year, daterange.YEAR_MAX)
+            m1 = _check(month, 12)
+            d1 = _check(day, calendar.monthrange(y1, m1)[1])
             self.dstart = datetime(y0, m0, d0)
             self.dend = datetime(y1, m1, d1) + relativedelta(days=+1)
+
+        # (start, end) constructor
+        elif any(key in kwargs for key in ("start", "end")):
+            start = kwargs.get("start", _getitem(args, 0))
+            end = kwargs.get("end", _getitem(args, 1))
+
+            # Full dates
+            if PartialDate.is_full_date(start):
+                self.dstart = PartialDate.parse(start).date()
+            if PartialDate.is_full_date(end):
+                self.dend = PartialDate.parse(end).date()
+
+            # None/Ellipsis combinations
+            if start is Ellipsis:
+                self.dstart = datetime(daterange.YEAR_MIN, 1, 1)
+            elif start is None and end in (None, Ellipsis):
+                self.dstart = datetime(daterange.YEAR_MIN, 1, 1)
+            if end is Ellipsis:
+                self.dend = datetime(daterange.YEAR_MAX, 1, 1)
+            elif end is None and start in (None, Ellipsis):
+                self.dend = datetime(daterange.YEAR_MAX, 1, 1)
+
+            # start is PartialDate
+            if PartialDate.is_partial_date(start):
+                self.dstart = PartialDate.parse(start).first()
+
+            # end is PartialDate
+            if PartialDate.is_partial_date(end):
+                self.dend = PartialDate.parse(end).first()
+
+            # start is None and end is not None or Ellipsis
+            if start is None and end not in (None, Ellipsis):
+                self.dstart = PartialDate.parse(end).sub(1).first()
+
+            # end is None and start is not None or Ellipsis
+            if end is None and start not in (None, Ellipsis):
+                self.dend = PartialDate.parse(start).add(1).first()
 
     def interval(self) -> tuple[datetime, datetime]:
         """Returns the (start, end) datetime interval."""
