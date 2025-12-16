@@ -1,6 +1,6 @@
 # Local only
 notes/
-tests/data/MWX_*
+tests/data/*
 tests/data/*.sqlite
 .vscode/
 .python-version

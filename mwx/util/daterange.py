@@ -7,11 +7,9 @@ from __future__ import annotations
 import calendar
 from datetime import datetime
 from types import EllipsisType
-from typing import Any
+from typing import Any, Iterator
 
 from dateutil.relativedelta import relativedelta
-
-from mwx.model import Entry
 
 DateLikeObject = str | datetime | EllipsisType | None
 _DATERANGE_INIT_KEYS = ("start", "end", "year", "month", "day")
@@ -274,3 +272,35 @@ class daterange:
     def end(self) -> datetime:
         """Returns the end datetime."""
         return self.dend
+
+    def walk(self, step: str | relativedelta) -> Iterator[datetime]:
+        """Yields datetimes from start to end, stepping by `step`.
+
+        `step` can be a dateutil.relativedelta object, or a string in the
+        format "XU", where X is an integer, and U one of "d", "m" or "y", upper
+        or lower case, representing days, months or years respectively.
+
+        """
+        if isinstance(step, str):
+            unit = step[-1].lower()
+            try:
+                value = int(step[:-1])
+            except ValueError:
+                raise ValueError(f"Invalid step format: {step}")
+            if unit == "d":
+                delta = relativedelta(days=+value)
+            elif unit == "m":
+                delta = relativedelta(months=+value)
+            elif unit == "y":
+                delta = relativedelta(years=+value)
+            else:
+                raise ValueError(f"Invalid step unit: {unit}")
+        elif isinstance(step, relativedelta):
+            delta = step
+        else:
+            raise TypeError("step must be a string or a relativedelta object.")
+
+        current = self.dstart
+        while current < self.dend:
+            yield current
+            current += delta

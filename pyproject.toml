@@ -2,13 +2,18 @@
 name = "mwx"
 version = "0.1.0"
 description = "QoL tool for MyWallet Android app"
-readme = "README.md"
+readme = "README-ES.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Ángel Moreno Prieto", email = "angelmorenoprieto@gmail.com" },
+]
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.3.3",
- "pandas>=2.3.2",
- "pytest>=8.4.1",
- "python-dateutil>=2.9.0.post0",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.2",
+    "pytest>=8.4.1",
+    "python-dateutil>=2.9.0.post0",
 ]
 
 [dependency-groups]
