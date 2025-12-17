@@ -1,6 +1,6 @@
 [project]
 name = "mwx"
-version = "0.1.0"
+version = "0.1.1"
 description = "QoL tool for MyWallet Android app"
 readme = "README-ES.md"
 license = { text = "MIT" }

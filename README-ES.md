@@ -97,3 +97,35 @@ Automáticamente gestiona:
 * **Entidades a eliminar**, todas aquéllas que existan en su tabla respectiva, pero cuyo `mwid` no esté en el modelo.
 * **Entidades erróneas**, todas aquéllas cuyo `mwid` no exista ya en su tabla respectiva, serán ignoradas y se informará al usuario.
 
+## Clase `Wallet`
+
+Representa una cartera de MiBilletera.
+
+Proporciona las siguientes listas para acceder a las entidades:
+* **`accounts`**
+* **`categories`**
+* **`counterparts`**
+* **`entries`**
+* **`incomes`**
+* **`expenses`**
+* **`transfers`**
+
+Los métodos `read()` y `write()` son equivalentes a `etl.read()` y `etl.write()`.
+
+#### `find(*args, **kwargs)`
+
+Proporciona mecanismos para filtrar y devolver subconjuntos de entidades. Las **claves válidas** son:
+
+* **`entity`**, que debe ser una de `"account"`, `"category"`, `"counterpart"`, `"entry"`, `"income"`, `"expense"` o `"transfer"`, para especificar en qué entidad buscar. Si no se indica, se asume en función del resto de claves usadas.
+* **`date`**, admite un `datetime.datetime`, un `mwx.util.daterange`, o una cadena con formato `"YYYY-MM-DD"` o `"YYYYMMDD"`, donde los meses y los días son opcionales, en cuyo caso se tomará el rango completo. También acepta tuplas, que serán convertidas a `mwx.util.daterange`.
+* **`year`**, **`month`**, **`day`**; mecanismos alternativos de indicar una fecha o un periodo. Aceptan `Ellipsis` como valor para indicar un periodo.
+* **`amount`** puede recibir una tupla, que se interpretará como [min, max).
+* **`account`** y **`counterpart`** buscarán tanto en `source` como en `target`.
+* **`flow`**
+* **`item`** y **`details`** buscan, por defecto, si el substring indicado aparece, en minúsculas, en el `item` o `details` de la entidad, en minúsculas. Para deshabilitar este comportamiento, se precede la cadena con `!`.
+
+Cualquier parámetro admite una lista, en cuyo caso, se devolverán los resultados que cumplan cada condición por separado. Si múltiples parámetros son listas, se calculará el producto. Resultados duplicados no serán eliminados.
+
+#### `sum(account, date, **kwargs)` y `budget(account, date, **kwargs)`
+
+Métodos que sirven para automatizar la suma de las cantidades de dinero de las entradas filtradas para las condiciones especificadas. Nótese que, en `sum()`, la fecha debe ser un rango, o se convertirá a `[date, +inf)`. Igualmente, en `budget()` no debe ser un rango, ya que siempre se forzará a `[-inf, date)`.

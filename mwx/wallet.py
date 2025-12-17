@@ -402,3 +402,12 @@ class Wallet:
             *funcs,
             **params,
         )
+
+    # Utility methods
+
+    def copy(self) -> Wallet:
+        """Creates a deep copy of the wallet."""
+        return Wallet(self.source_path)
+
+    def __str__(self) -> str:
+        return f"<Wallet from '{self.source_path}' with {len(self.entries)} entries>"
