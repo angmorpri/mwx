@@ -18,7 +18,7 @@ import pytest
 
 from mwx.etl import MWXNamespace, read, write
 from mwx.model import Account, Category, Counterpart, Entry
-from mwx.util import find_first
+from mwx.util import Money, find_first
 
 TESTING_DB_PATH = Path(__file__).parent / "data" / "Sep_10_2025_ExpensoDB"
 
@@ -212,7 +212,7 @@ def test_write_incomes_expenses(mwx_data: MWXNamespace) -> None:
     new_data = read(new_db_path)
 
     # Verify changes
-    assert find_first(new_data.entries, mwid=5332).amount == 1_000_000.12
+    assert find_first(new_data.entries, mwid=5332).amount == Money(1_000_000.12)
     assert find_first(new_data.entries, mwid=5331).date == datetime(2001, 1, 1)
     assert find_first(new_data.entries, mwid=5330).item == "MODIFIED"
     assert find_first(new_data.entries, mwid=5329).details == "MODIFIED\nDETAILS"
@@ -222,7 +222,7 @@ def test_write_incomes_expenses(mwx_data: MWXNamespace) -> None:
     assert find_first(new_data.entries, mwid=5327) is None
     entry = find_first(new_data.entries, mwid=5333)
     assert entry is not None
-    assert entry.amount == 69.69
+    assert entry.amount == Money(69.69)
     assert entry.item == "Sin concepto"
     assert entry.details == ""
 
@@ -232,7 +232,7 @@ def test_write_transfers(mwx_data: MWXNamespace) -> None:
     data = mwx_data
 
     # Modify transfers - generic
-    find_first(data.entries, type=0, mwid=1018).amount = 420.69
+    find_first(data.entries, type=0, mwid=1018).amount = Money(420.69)
     find_first(data.entries, type=0, mwid=1017).date = datetime(1996, 12, 15)
     find_first(data.entries, type=0, mwid=1016).item = "MODIFIED TRANSFER"
     find_first(data.entries, type=0, mwid=1015).details = "MODIFIED\nTRANSFER\nDETAILS"
@@ -290,7 +290,7 @@ def test_write_transfers(mwx_data: MWXNamespace) -> None:
     new_data = read(new_db_path)
 
     # Verify changes
-    assert find_first(new_data.entries, type=0, mwid=1018).amount == 420.69
+    assert find_first(new_data.entries, type=0, mwid=1018).amount == Money(420.69)
     assert find_first(new_data.entries, type=0, mwid=1017).date == datetime(
         1996, 12, 15
     )

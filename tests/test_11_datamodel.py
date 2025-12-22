@@ -8,6 +8,7 @@ from datetime import datetime
 import pytest
 
 from mwx.model import Account, Category, Counterpart, Entry
+from mwx.util import Money
 
 
 @pytest.fixture(autouse=True)
@@ -190,7 +191,7 @@ def test_entry_ok():
     cat = Category(30, "X99. Mi Categoria", -1)
 
     entry = Entry(-1, -1234.567891011, datetime.today(), -1, src, dst, cat)
-    assert entry.amount == 1234.57
+    assert entry.amount == Money(1234.57)
     assert entry.source.mwid == 10
     assert entry.target.mwid == 0
     assert entry.category.mwid == 30
@@ -448,5 +449,5 @@ def test_entry_str():
     )
     assert (
         str(entry)
-        == "[00123] 2025-08-22:  1234.56 € <X99> (@MiCuenta -> Payee), 'Test Item'"
+        == "[00123] 2025-08-22: +    1.234,56 € <X99> (@MiCuenta -> Payee), 'Test Item'"
     )

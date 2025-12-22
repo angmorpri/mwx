@@ -14,6 +14,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
+from mwx.util import Money
+
 RGB_REGEX = re.compile(r"^#([0-9a-fA-F]{6})$")
 CATEGORY_FULL_REGEX = re.compile(r"^[A-Za-z]\d{2}\. .+$")
 CATEGORY_CODE_REGEX = re.compile(r"^[A-Za-z]\d{2}$")
@@ -343,7 +345,7 @@ class Entry(WalletEntity):
     def __init__(
         self,
         mwid: int,
-        amount: float,
+        amount: Money,
         date: datetime,
         ent_type: int,
         source: Account | Counterpart,
@@ -379,13 +381,13 @@ class Entry(WalletEntity):
         self.item = item
 
     @property
-    def amount(self) -> float:
+    def amount(self) -> Money:
         return self._amount
 
     @amount.setter
-    def amount(self, value: float) -> None:
+    def amount(self, value: float | Money) -> None:
         """Amount must be positive, and gets rounded to 2 decimal places."""
-        self._amount = abs(round(value, 2))
+        self._amount = abs(Money(value))
 
     @property
     def type(self) -> int:
@@ -518,7 +520,7 @@ class Entry(WalletEntity):
     def to_dict(self) -> dict[str, Any]:
         return {
             "mwid": self.mwid,
-            "amount": self.amount,
+            "amount": self.amount.to_float(),
             "date": self.date.isoformat(),
             "type": self.type,
             "source": self.source.to_dict(),
@@ -535,7 +537,7 @@ class Entry(WalletEntity):
             return {
                 "trans_from_id": self.source.mwid,
                 "trans_to_id": self.target.mwid,
-                "trans_amount": self.amount,
+                "trans_amount": self.amount.to_float(),
                 "trans_date": f"{self.date:%Y%m%d}",
                 "trans_note": "\n".join(
                     [
@@ -548,7 +550,7 @@ class Entry(WalletEntity):
         else:
             # 'tbl_trans' entry
             return {
-                "exp_amount": self.amount,
+                "exp_amount": self.amount.to_float(),
                 "exp_cat": self.category.mwid,
                 "exp_acc_id": self.source.mwid if self.type == -1 else self.target.mwid,
                 "exp_payee_name": (
@@ -563,4 +565,10 @@ class Entry(WalletEntity):
             }
 
     def __str__(self) -> str:
-        return f"[{self.str_mwid}] {self.date:%Y-%m-%d}: {self.amount:8.2f} € <{self.category.code}> ({self.source.repr_name} -> {self.target.repr_name}), '{self.item}'"
+        mwid = self.str_mwid
+        date = f"{self.date:%Y-%m-%d}"
+        amount = str(self.amount)
+        category = f"<{self.category.code}>"
+        s2t = f"({self.source.repr_name} -> {self.target.repr_name})"
+        item = f"'{self.item}'"
+        return f"[{mwid}] {date}: {amount} {category} {s2t}, {item}"

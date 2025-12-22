@@ -6,6 +6,7 @@ from typing import Any
 
 from .daterange import daterange
 from .find import find, find_first
+from .money import Money
 
 
 def dict_product(d: dict[str, list[Any]]) -> list[dict[str, Any]]:
