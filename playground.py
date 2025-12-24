@@ -15,6 +15,4 @@ if __name__ == "__main__":
     # Load wallet from Excel
     wallet = Wallet(TESTING_DB_PATH)
 
-    # Write wallet to Excel
-    excel.write(OUTPUT_PATH, wallet, override=True)
-    print(f"Wrote wallet data to {OUTPUT_PATH}")
+    print(wallet.budget("@Básicos", "2100-01-01"))

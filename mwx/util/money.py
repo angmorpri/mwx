@@ -40,10 +40,18 @@ class Money:
     # Arithmetic operations
 
     def __add__(self, other: Number) -> Money:
-        return Money(self._amount + self._to_decimal(other))
+        if isinstance(other, Money):
+            return Money(self._amount + other._amount)
+        elif isinstance(other, (int, float, Decimal)):
+            return Money(self._amount + Money(other)._amount)
+        return NotImplemented
 
     def __sub__(self, other: Number) -> Money:
-        return Money(self._amount - self._to_decimal(other))
+        if isinstance(other, Money):
+            return Money(self._amount - other._amount)
+        elif isinstance(other, (int, float, Decimal)):
+            return Money(self._amount - Money(other)._amount)
+        return NotImplemented
 
     def __mul__(self, other: int | float | Decimal) -> Money:
         return Money(self._amount * Decimal(str(other)))

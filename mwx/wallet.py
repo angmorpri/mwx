@@ -376,8 +376,7 @@ class Wallet:
 
         # Get entries
         entries = self.find(*funcs, **params)
-        total = sum(entry.amount * entry.flow(params["account"]) for entry in entries)
-        return round(total, 2)
+        return sum(entry.amount * entry.flow(params["account"]) for entry in entries)
 
     def budget(
         self,
