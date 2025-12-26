@@ -142,3 +142,6 @@ class Money:
 
     def to_float(self) -> float:
         return float(self._amount)
+
+    def __float__(self) -> float:
+        return self.to_float()
