@@ -6,6 +6,7 @@ tests/data/*.sqlite
 .vscode/
 .python-version
 .pytest_cache
+playground.py
 
 # Python-generated files
 __pycache__/

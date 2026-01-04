@@ -2,7 +2,7 @@
 name = "mwx"
 version = "0.1.1"
 description = "Python toolkit for inspecting and manipulating MyWallet Android backup databases"
-readme = "README-ES.md"
+readme = "README.md"
 license = { text = "MIT" }
 authors = [
     { name = "Ángel Moreno Prieto", email = "angelmorenoprieto@gmail.com" },
