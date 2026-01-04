@@ -1,4 +1,5 @@
 # Local only
+_old/
 notes/
 tests/data/*
 tests/data/*.sqlite

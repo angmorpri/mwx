@@ -69,6 +69,16 @@ class WalletEntity(ABC):
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} mwid={self.mwid}>"
 
+    @abstractmethod
+    def to_dict(self) -> dict[str, Any]:
+        """Abstract method for serialization to dictionary."""
+        pass
+
+    @abstractmethod
+    def to_mywallet(self) -> dict[str, Any]:
+        """Abstract method for conversion to MyWallet format."""
+        pass
+
 
 # Entities
 

@@ -1,20 +1,26 @@
 [project]
 name = "mwx"
 version = "0.1.1"
-description = "QoL tool for MyWallet Android app"
+description = "Python toolkit for inspecting and manipulating MyWallet Android backup databases"
 readme = "README-ES.md"
 license = { text = "MIT" }
 authors = [
     { name = "Ángel Moreno Prieto", email = "angelmorenoprieto@gmail.com" },
 ]
 requires-python = ">=3.12"
-dependencies = [
-    "openpyxl>=3.1.5",
-    "python-dateutil>=2.9.0.post0",
+dependencies = ["openpyxl>=3.1.5", "python-dateutil>=2.9.0.post0"]
+
+urls = { Repository = "https://github.com/angmorpri/mwx", Issues = "https://github.com/angmorpri/mwx/issues" }
+
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
 ]
 
 [dependency-groups]
 dev = ["black>=25.1.0", "pytest>=8.4.1", "ruff>=0.12.9"]
 
-[tool.ruff.lint]
-ignore = ["F401"]
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
