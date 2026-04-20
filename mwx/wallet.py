@@ -129,6 +129,78 @@ class Wallet:
         )
         return self.target_path
 
+    # Excel
+
+    def import_(
+        self,
+        path: str | Path,
+        *,
+        validate: bool = False,
+        delete_missing: bool = False,
+        dry_run: bool = False,
+    ) -> etl.ximport.ImportDiff:
+        """Imports wallet data from an Excel workbook (.xlsx).
+
+        Reads a file previously produced by `export()` (or hand-crafted
+        with the same schema) and applies the changes to this wallet in
+        place. Entities are matched by MWID; rows without MWID are
+        treated as new entities.
+
+        'validate' verifies that per-account and total capital after import
+        match the canonical values stored in the '__meta__' sheet of the
+        Excel file.
+
+        'delete_missing', if True, entities present in this wallet but absent
+        from the Excel are removed. If False (default), they are kept untouched
+        (safer default).
+
+        'dry_run', if True, computes and returns the diff without applying any
+        changes. Useful for previewing.
+
+        Returns an ImportDiff summarizing the changes applied (or that
+        would be applied in dry_run mode). Call 'diff.summary()' for a
+        human-readable report.
+
+        """
+        return etl.import_(
+            self,
+            path,
+            validate=validate,
+            delete_missing=delete_missing,
+            dry_run=dry_run,
+        )
+
+    def export(
+        self,
+        path: str | Path,
+        *,
+        overwrite: bool = False,
+    ) -> Path:
+        """Exports wallet data to an Excel workbook (.xlsx).
+
+        Creates a spreadsheet with three sheets ('Entries', 'Categories'
+        and 'Accounts'), where each field is adapted to its natural Excel
+        representation:
+        - Dates are written as Excel dates.
+        - Amounts are written as numbers with format '#,##0.00'.
+        - Colors (Account, Category) are painted as cell background and
+        kept as hex string in the same cell.
+        - Booleans are written as native Excel TRUE/FALSE.
+        - Legacy entities are rendered in italic grey.
+
+        Entries' 'source', 'target' and 'category' are written using
+        their 'repr_name' (e.g. '@Account', 'A01. Name') for readability.
+
+        'path' must be the destination for the .xlsx file. If the extension is
+        missing, '.xlsx' will be appended. If the file already exists and
+        'overwrite' is False (default), a FileExistsError will be raised. If
+        'overwrite' is True, the file will be replaced.
+
+        Returns the absolute path to the written file.
+
+        """
+        return etl.export(self, path, overwrite=overwrite)
+
     # Convenience methods
 
     def find(

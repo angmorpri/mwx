@@ -6,7 +6,8 @@ entities: accounts, categories, entries, counterparts.
 
 """
 
-from . import excel
 from .common import MWXNamespace
 from .read import read
 from .write import write
+from .xexport import export
+from .ximport import import_

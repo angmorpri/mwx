@@ -5,6 +5,7 @@ money.py - MWX money utilities
 
 from __future__ import annotations
 
+import math
 from decimal import ROUND_HALF_UP, Decimal, getcontext
 from typing import Any, TypeAlias, Union
 
@@ -93,7 +94,7 @@ class Money:
         if isinstance(other, Money):
             return self._amount == other._amount
         elif isinstance(other, (int, float, Decimal)):
-            return self._amount == float(other)
+            return self._amount == self._to_decimal(other)
         return NotImplemented
 
     def __lt__(self, other: Any) -> bool:
@@ -145,3 +146,29 @@ class Money:
 
     def __float__(self) -> float:
         return self.to_float()
+
+    def __round__(self, ndigits: int | None = None) -> Money:
+        """Round to `ndigits` decimal places using ROUND_HALF_UP.
+
+        Always returns Money: in accounting, a rounded amount is still
+        an amount. Use math.floor/ceil/trunc if you need a plain int.
+
+        If `ndigits` is None, rounds to the nearest integer amount
+        (but still as Money, e.g. Money('150.73') → Money('151.00')).
+        Negative `ndigits` rounds to tens, hundreds, etc.
+
+        """
+        n = 0 if ndigits is None else ndigits
+        # Exponente para quantize: 10^-n  (p.ej. n=2 → Decimal('0.01'))
+        quant = Decimal(1).scaleb(-n)
+        rounded = self._amount.quantize(quant, rounding=ROUND_HALF_UP)
+        return Money(rounded)
+
+    def __floor__(self) -> int:
+        return math.floor(self._amount)
+
+    def __ceil__(self) -> int:
+        return math.ceil(self._amount)
+
+    def __trunc__(self) -> int:
+        return math.trunc(self._amount)
