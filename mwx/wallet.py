@@ -131,46 +131,37 @@ class Wallet:
 
     # Excel
 
-    def import_(
-        self,
+    @classmethod
+    def from_excel(
+        cls,
         path: str | Path,
         *,
         validate: bool = False,
-        delete_missing: bool = False,
-        dry_run: bool = False,
-    ) -> etl.ximport.ImportDiff:
-        """Imports wallet data from an Excel workbook (.xlsx).
+    ) -> Wallet:
+        """Constructs a new Wallet from an Excel workbook (.xlsx).
 
-        Reads a file previously produced by `export()` (or hand-crafted
-        with the same schema) and applies the changes to this wallet in
-        place. Entities are matched by MWID; rows without MWID are
-        treated as new entities.
+        Reads a file produced by `to_excel()` (or hand-crafted with the
+        same schema) and builds a fresh Wallet instance from its contents.
+        The Excel is the sole source of truth: no prior wallet state is
+        assumed or required.
 
-        'validate' verifies that per-account and total capital after import
-        match the canonical values stored in the '__meta__' sheet of the
-        Excel file.
+        Entities without a MWID (blank cell or -1) are created with
+        mwid=-1, which the model treats as "new entity pending DB
+        assignment". Counterparts not listed in a dedicated sheet are
+        created on the fly from source/target references in entries.
 
-        'delete_missing', if True, entities present in this wallet but absent
-        from the Excel are removed. If False (default), they are kept untouched
-        (safer default).
+        If `validate` is True, verifies that the capital computed from the
+        reconstructed wallet matches the canonical totals stored in the hidden
+        '__meta__' sheet (tolerance: 0.01 €). Raises ValidationError if they
+        don't match. Requires a file produced by to_excel().
 
-        'dry_run', if True, computes and returns the diff without applying any
-        changes. Useful for previewing.
-
-        Returns an ImportDiff summarizing the changes applied (or that
-        would be applied in dry_run mode). Call 'diff.summary()' for a
-        human-readable report.
+        Returns a new Wallet instance. Does not modify any existing
+        wallet.
 
         """
-        return etl.import_(
-            self,
-            path,
-            validate=validate,
-            delete_missing=delete_missing,
-            dry_run=dry_run,
-        )
+        return etl.import_(cls, path, validate=validate)
 
-    def export(
+    def to_excel(
         self,
         path: str | Path,
         *,

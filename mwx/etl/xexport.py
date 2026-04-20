@@ -1,6 +1,6 @@
 # 2026/04/20
 """
-export.py - Export wallet data to an Excel workbook.
+xexport.py - Export wallet data to an Excel workbook.
 
 Defines a single public function, `export()`, that writes a Wallet's
 accounts, categories and entries to an .xlsx file with one sheet per
@@ -12,8 +12,6 @@ The resulting workbook is designed to be editable and reimportable:
 - MWID is the stable anchor; editing it breaks the link to the model.
 - Derived fields (repr_name) are omitted to avoid ambiguity.
 - Immutable fields (Type) are exported as read-only visual columns.
-- All UI text is in Spanish for the end user; internal field names
-  stay in English in code comments and parameters.
 
 """
 from __future__ import annotations
@@ -59,7 +57,7 @@ _AMOUNT_FMT = "#,##0.00"
 _TOP_ALIGN = Alignment(vertical="top")
 
 # Labels for type fields in the visible sheets
-_TYPE_LABELS = {-1: "Gasto", 0: "Transferencia", +1: "Ingreso"}
+_TYPE_LABELS = {-1: "Gasto", 0: "Traslado", +1: "Ingreso"}
 
 
 # Column specifications

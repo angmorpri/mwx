@@ -3,3 +3,5 @@
 
 from .etl import read, write
 from .wallet import Wallet
+
+__version__ = "0.1.1"

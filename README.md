@@ -195,11 +195,11 @@ wallet.sum(account, (..., date), *funcs, **params)
 
 ---
 
-## Importing and exporting from Excel
+## 📊 Importing and exporting from Excel
 
 Entries, categories and accounts can safely be edited via Excel.
 
-### `export(path, *, overwrite=False)`
+### `to_excel(path, *, overwrite=False)`
 
 Exports the current `Wallet` to an Excel .xlsx file. A hidden sheet "\__meta__" is created to store some metadata that can be later used to validate the consistency of the modifications. If `overwrite` is `False`, raises an error if the `path` already exists.
 
@@ -211,9 +211,9 @@ The output file will have three sheets, for entries, categories and accounts, in
 * Categories can be given only by its code.
 * New lines in details must be indicated with double slashes (`//`).
 
-### `import_(path, *, validate=False, delete_missing=False, dry_run=False)`
+### `from_excel(path, *, validate=False)`
 
-Imports in the current `Wallet` from an Excel file previously exported via `wallet.export(...)`. If `validate` is `True`, checks that modifications made do not change the total value of the wallet. If `delete_missing` is `True`, entities present in this wallet but absent from the Excel are removed.
+Imports a new `Wallet` from an Excel file, previously exported via `wallet.export(...)`. If `validate` is `True`, checks that modifications made do not change the total value of the wallet.
 
 
 ---
