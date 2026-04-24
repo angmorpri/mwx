@@ -25,6 +25,30 @@ NOTES_TO_TBLNOTES = [-1, +1, 0]  # 0 --> -1 neutral, +1 --> +1 payer, -1 --> 0 p
 ENTRY_TO_TBLTRANS = [None, +1, 0]  # +1 --> +1 income, -1 --> 0 expense
 
 
+# Custom exceptions
+
+
+class AmbiguousAccountError(ValueError):
+    """Raised when an operation requires a single account, but multiple
+    accounts match the criteria.
+
+    """
+
+    pass
+
+
+class AmbiguousCounterpartError(ValueError):
+    """Raised when an operation requires a single counterpart, but multiple
+    counterparts match the criteria.
+
+    """
+
+    pass
+
+
+# Base class
+
+
 class WalletEntity(ABC):
     """Base class for MWX models.
 
@@ -452,6 +476,40 @@ class Entry(WalletEntity):
         if value == self.source:
             raise ValueError("Entry target cannot be the same as source.")
         self._target = value
+
+    @property
+    def account(self) -> Account:
+        """In case of incomes or expenses, return the involved account.
+
+        In case of transfers, raise an error, since there'll be two involved
+        accounts, and this property would be ambiguous.
+
+        """
+        if self.type == 0:
+            raise AmbiguousAccountError(
+                "Entry involves two accounts, 'account' property is ambiguous."
+            )
+        elif self.type == -1:
+            return self.source  # Expense: source is the account
+        else:
+            return self.target  # Income: target is the account
+
+    @property
+    def counterpart(self) -> Counterpart:
+        """In case of incomes or expenses, return the involved counterpart.
+
+        In case of transfers, raise an error, since there'll be two involved
+        counterparts, and this property would be ambiguous.
+
+        """
+        if self.type == 0:
+            raise AmbiguousCounterpartError(
+                "Entry involves two counterparts, 'counterpart' property is ambiguous."
+            )
+        elif self.type == -1:
+            return self.target  # Expense: target is the counterpart
+        else:
+            return self.source  # Income: source is the counterpart
 
     @property
     def category(self) -> Category:
